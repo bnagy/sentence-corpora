@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sentence-corpora"
+version = "0.1.0"
+description = "Flexible sentence corpus handling with hierarchical sampling"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "Ben Nagy", email = "ben.nagy.web@gmail.com" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Text Processing :: Linguistic",
+]
+dependencies = [
+    "numpy>=1.20.0",
+    "tabulate>=0.8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/bnagy/sentence-corpora"
+Repository = "https://github.com/bnagy/sentence-corpora"
+Issues = "https://github.com/bnagy/sentence-corpora/issues"
+
+[tool.setuptools.packages.find]
+include = ["sentence_corpora*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--cov=sentence_corpora", "--cov-report=term-missing", "--cov-fail-under=90"]
+
+[tool.coverage.run]
+source = ["sentence_corpora"]
+
+[tool.coverage.report]
+show_missing = true
