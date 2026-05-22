@@ -79,6 +79,22 @@ samples, breakdown = BalancedSampler.sample_balanced(
 )
 ```
 
+### LambdaG Authorship Verification
+
+```python
+from sentence_corpora.lambdag import LambdaGAV
+
+av = LambdaGAV()
+result = av.run_single_av_problem(
+    known_translator="Guillelmus de Morbeka",
+    unknown_corpus=nile_corpus,
+    reference_corpus=train_corpus,
+    known_size=1000,
+    reference_size=5000,
+)
+print(f"Score: {result['score']}")
+```
+
 ## Package Structure
 
 ```
@@ -89,8 +105,10 @@ sentence_corpora/
 ├── hierarchies/         # Hierarchy-specific wrappers
 │   ├── two_level.py     # Two-level hierarchy (work/author)
 │   └── three_level.py   # Three-level hierarchy (work/author/translator)
-└── sampling/            # Sampling algorithms
-    └── balanced_sampler.py
+├── sampling/            # Sampling algorithms
+│   └── balanced_sampler.py
+└── lambdag/             # LambdaG authorship verification
+    └── av.py            # Authorship verification with balanced sampling
 ```
 
 ## Development
