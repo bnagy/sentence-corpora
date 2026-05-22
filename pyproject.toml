@@ -24,6 +24,7 @@ classifiers = [
 dependencies = [
     "numpy>=1.20.0",
     "tabulate>=0.8.0",
+    "pandas>=2.0.0",
     "lambdag @ git+https://github.com/andreanini/lambdag.git",
 ]
 
