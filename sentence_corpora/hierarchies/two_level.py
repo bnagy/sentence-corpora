@@ -7,6 +7,8 @@ convenience methods without inheritance issues.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 from ..corpus import Corpus
@@ -88,3 +90,47 @@ class TwoLevelCorpus:
             grouped, ["work", "author"], total, rng, return_sentences=True
         )
         return samples, breakdown
+
+    def stats(self) -> None:
+        """Print a table of works, sentences, and tokens per author."""
+        from tabulate import tabulate
+
+        rows: dict[str, dict[str, Any]] = {}
+        for sentence in self._corpus:
+            a = str(sentence.author)
+            if a not in rows:
+                rows[a] = {"works": set(), "sentences": 0, "tokens": 0}
+            rows[a]["works"].add(str(sentence.work))
+            rows[a]["sentences"] += 1
+            rows[a]["tokens"] += len(sentence.text.split())
+
+        table = [
+            [a, len(rows[a]["works"]), rows[a]["sentences"], rows[a]["tokens"]]
+            for a in sorted(rows)
+        ]
+        table.append(
+            [
+                "TOTAL",
+                len({w for r in rows.values() for w in r["works"]}),
+                sum(r["sentences"] for r in rows.values()),
+                sum(r["tokens"] for r in rows.values()),
+            ]
+        )
+        print(
+            tabulate(
+                table,
+                headers=["Author", "Works", "Sentences", "Tokens"],
+                tablefmt="simple",
+                intfmt=",",
+            )
+        )
+
+    def to_pickle(self, path: str) -> None:
+        """Save this corpus to a pickle file."""
+        self._corpus.to_pickle(path)
+
+    @classmethod
+    def from_pickle(cls, path: str) -> TwoLevelCorpus:
+        """Load a corpus from a pickle file."""
+        corpus = Corpus.from_pickle(path)
+        return cls(corpus._sentences)

@@ -7,7 +7,6 @@ to add convenience methods without inheritance issues.
 
 from __future__ import annotations
 
-import pickle
 from typing import Any
 
 import numpy as np
@@ -149,11 +148,10 @@ class ThreeLevelCorpus:
 
     def to_pickle(self, path: str) -> None:
         """Save this corpus to a pickle file."""
-        with open(path, "wb") as f:
-            pickle.dump(self, f)
+        self._corpus.to_pickle(path)
 
     @classmethod
     def from_pickle(cls, path: str) -> ThreeLevelCorpus:
         """Load a corpus from a pickle file."""
-        with open(path, "rb") as f:
-            return pickle.load(f)
+        corpus = Corpus.from_pickle(path)
+        return cls(corpus._sentences)

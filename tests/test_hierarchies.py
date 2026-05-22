@@ -116,6 +116,43 @@ class TestTwoLevelCorpus:
         assert "work1" in breakdown
         assert "work2" in breakdown
 
+    def test_stats(self, capsys):
+        """Test stats method prints correct table."""
+        sentences = [
+            Sentence(
+                text="word1 word2 word3",
+                metadata={"work": "work1", "author": "author1"},
+            ),
+            Sentence(
+                text="word1 word2",
+                metadata={"work": "work2", "author": "author1"},
+            ),
+            Sentence(
+                text="word1 word2 word3 word4",
+                metadata={"work": "work1", "author": "author2"},
+            ),
+        ]
+        corpus = TwoLevelCorpus(sentences)
+        corpus.stats()
+        captured = capsys.readouterr()
+        assert "author1" in captured.out
+        assert "author2" in captured.out
+        assert "TOTAL" in captured.out
+
+    def test_to_from_pickle(self, tmp_path):
+        """Test pickling and unpickling TwoLevelCorpus."""
+        sentences = [
+            Sentence(text="Text 1", metadata={"work": "work1", "author": "author1"}),
+        ]
+        corpus = TwoLevelCorpus(sentences)
+
+        path = tmp_path / "corpus.pkl"
+        corpus.to_pickle(str(path))
+
+        loaded = TwoLevelCorpus.from_pickle(str(path))
+        assert len(loaded) == 1
+        assert loaded[0].text == "Text 1"
+
 
 class TestThreeLevelCorpus:
     """Tests for ThreeLevelCorpus class."""
