@@ -205,3 +205,86 @@ class TestCorpus:
         r = repr(sentence)
         assert "..." in r
         assert len(r) < len(long_text) + 50
+
+    def test_chunk_works_empty_corpus(self):
+        """Test chunk_works on empty corpus."""
+        corpus = Corpus([])
+        chunked = corpus.chunk_works(100)
+        assert len(chunked) == 0
+
+    def test_chunk_works_no_levels(self):
+        """Test chunk_works on corpus with sentences but no metadata levels."""
+        sentences = [
+            Sentence(text="word " * 500, metadata={}),
+            Sentence(text="word " * 500, metadata={}),
+        ]
+        corpus = Corpus(sentences)
+        chunked = corpus.chunk_works(100)
+        assert len(chunked) == 2
+
+    def test_chunk_works_even_chunks(self):
+        """Test that chunks are as even as possible."""
+        # 20 sentences * 20 tokens = 400 tokens, min_tokens=100
+        # Should get 4 chunks: 100, 100, 100, 100 tokens
+        sentences = [
+            Sentence(text="word " * 20, metadata={"work": "w1"}) for _ in range(20)
+        ]
+        corpus = Corpus(sentences)
+        chunked = corpus.chunk_works(100)
+
+        # Check all sentences present
+        assert len(chunked) == 20
+
+        # Check each chunk has at least min_tokens
+        from collections import Counter
+
+        work_counts = Counter(s.metadata["work"] for s in chunked)
+        for work, count in work_counts.items():
+            tokens = sum(
+                len(s.text.split()) for s in chunked if s.metadata["work"] == work
+            )
+            assert tokens >= 100, f"Chunk {work} has only {tokens} tokens"
+
+        # Check chunks are roughly even (within 1 sentence of each other)
+        chunk_sizes = [count for count in work_counts.values()]
+        assert max(chunk_sizes) - min(chunk_sizes) <= 1
+
+    def test_chunk_works_sentences_sequential(self):
+        """Test that sentences remain in sequential order."""
+        # 4 sentences * 30 tokens = 120 tokens, min_tokens=50
+        # Should get 2 chunks: 60, 60 tokens
+        sentences = [
+            Sentence(text="A " * 30, metadata={"work": "w1"}),
+            Sentence(text="B " * 30, metadata={"work": "w1"}),
+            Sentence(text="C " * 30, metadata={"work": "w1"}),
+            Sentence(text="D " * 30, metadata={"work": "w1"}),
+        ]
+        corpus = Corpus(sentences)
+        chunked = corpus.chunk_works(50)
+
+        # Extract texts in order
+        texts = [s.text for s in chunked]
+        assert texts[0].startswith("A")
+        assert texts[1].startswith("B")
+        assert texts[2].startswith("C")
+        assert texts[3].startswith("D")
+
+    def test_chunk_works_no_split_sentences(self):
+        """Test that sentences are not split across chunks."""
+        # Each sentence is 30 tokens, min_tokens=50
+        # Each chunk should have exactly 2 complete sentences
+        sentences = [
+            Sentence(text="word " * 30, metadata={"work": "w1"}),
+            Sentence(text="word " * 30, metadata={"work": "w1"}),
+            Sentence(text="word " * 30, metadata={"work": "w1"}),
+            Sentence(text="word " * 30, metadata={"work": "w1"}),
+        ]
+        corpus = Corpus(sentences)
+        chunked = corpus.chunk_works(50)
+
+        # Check each chunk has exactly 2 sentences
+        from collections import Counter
+
+        work_counts = Counter(s.metadata["work"] for s in chunked)
+        for count in work_counts.values():
+            assert count == 2, f"Expected 2 sentences per chunk, got {count}"

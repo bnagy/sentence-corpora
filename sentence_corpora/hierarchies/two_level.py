@@ -134,3 +134,8 @@ class TwoLevelCorpus:
         """Load a corpus from a pickle file."""
         corpus = Corpus.from_pickle(path)
         return cls(corpus._sentences)
+
+    def chunk_works(self, min_tokens: int) -> TwoLevelCorpus:
+        """Chunk works into smaller pieces with at least min_tokens each."""
+        chunked = self._corpus.chunk_works(min_tokens)
+        return TwoLevelCorpus(chunked._sentences)

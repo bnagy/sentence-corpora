@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from sentence_corpora import Sentence
 from sentence_corpora.hierarchies import ThreeLevelCorpus, TwoLevelCorpus
@@ -152,6 +153,54 @@ class TestTwoLevelCorpus:
         loaded = TwoLevelCorpus.from_pickle(str(path))
         assert len(loaded) == 1
         assert loaded[0].text == "Text 1"
+
+    def test_chunk_works(self):
+        """Test chunking works into smaller pieces."""
+        # 7 sentences * 500 tokens = 3500 tokens, min_tokens=1000
+        # Greedy approach: 1500, 1500, 500 tokens (last chunk under min_tokens is OK)
+        sentences = [
+            Sentence(
+                text="word " * 500, metadata={"work": "work1", "author": "author1"}
+            ),
+            Sentence(
+                text="word " * 500, metadata={"work": "work1", "author": "author1"}
+            ),
+            Sentence(
+                text="word " * 500, metadata={"work": "work1", "author": "author1"}
+            ),
+            Sentence(
+                text="word " * 500, metadata={"work": "work1", "author": "author1"}
+            ),
+            Sentence(
+                text="word " * 500, metadata={"work": "work1", "author": "author1"}
+            ),
+            Sentence(
+                text="word " * 500, metadata={"work": "work1", "author": "author1"}
+            ),
+            Sentence(
+                text="word " * 500, metadata={"work": "work1", "author": "author1"}
+            ),
+        ]
+        corpus = TwoLevelCorpus(sentences)
+
+        chunked = corpus.chunk_works(1000)
+        assert len(chunked) == 7
+        works = chunked.works()
+        assert "work1_1" in works
+        assert "work1_2" in works
+        assert "work1_3" in works
+
+    def test_chunk_works_too_small(self):
+        """Test that chunk_works raises ValueError for works too small."""
+        sentences = [
+            Sentence(
+                text="word " * 100, metadata={"work": "work1", "author": "author1"}
+            ),
+        ]
+        corpus = TwoLevelCorpus(sentences)
+
+        with pytest.raises(ValueError, match="has 100 tokens"):
+            corpus.chunk_works(200)
 
 
 class TestThreeLevelCorpus:
@@ -418,6 +467,49 @@ class TestThreeLevelCorpus:
 
         assert len(samples) == 2
         assert all(s.translator != "trans1" for s in samples)
+
+    def test_chunk_works(self):
+        """Test chunking works into smaller pieces."""
+        # 7 sentences * 500 tokens = 3500 tokens, min_tokens=1000
+        # Greedy approach: 1500, 1500, 500 tokens (last chunk under min_tokens is OK)
+        sentences = [
+            Sentence(
+                text="word " * 500,
+                metadata={"work": "work1", "author": "author1", "translator": "trans1"},
+            ),
+            Sentence(
+                text="word " * 500,
+                metadata={"work": "work1", "author": "author1", "translator": "trans1"},
+            ),
+            Sentence(
+                text="word " * 500,
+                metadata={"work": "work1", "author": "author1", "translator": "trans1"},
+            ),
+            Sentence(
+                text="word " * 500,
+                metadata={"work": "work1", "author": "author1", "translator": "trans1"},
+            ),
+            Sentence(
+                text="word " * 500,
+                metadata={"work": "work1", "author": "author1", "translator": "trans1"},
+            ),
+            Sentence(
+                text="word " * 500,
+                metadata={"work": "work1", "author": "author1", "translator": "trans1"},
+            ),
+            Sentence(
+                text="word " * 500,
+                metadata={"work": "work1", "author": "author1", "translator": "trans1"},
+            ),
+        ]
+        corpus = ThreeLevelCorpus(sentences)
+
+        chunked = corpus.chunk_works(1000)
+        assert len(chunked) == 7
+        works = chunked.works()
+        assert "work1_1" in works
+        assert "work1_2" in works
+        assert "work1_3" in works
 
     def test_to_from_pickle(self, tmp_path):
         """Test pickling and unpickling ThreeLevelCorpus."""
