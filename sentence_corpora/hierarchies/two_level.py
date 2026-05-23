@@ -93,7 +93,7 @@ class TwoLevelCorpus:
         return samples, breakdown
 
     def stats(self) -> None:
-        """Print a table of works, sentences, and tokens per author."""
+        """Print a table of works, sentences, tokens, and mean length per author."""
         from tabulate import tabulate
 
         rows: dict[str, dict[str, Any]] = {}
@@ -105,22 +105,34 @@ class TwoLevelCorpus:
             rows[a]["sentences"] += 1
             rows[a]["tokens"] += len(sentence.text.split())
 
+        def _mean(tokens: int, sentences: int) -> str:
+            return f"{tokens / sentences:.1f}" if sentences else "—"
+
         table = [
-            [a, len(rows[a]["works"]), rows[a]["sentences"], rows[a]["tokens"]]
+            [
+                a,
+                len(rows[a]["works"]),
+                rows[a]["sentences"],
+                rows[a]["tokens"],
+                _mean(rows[a]["tokens"], rows[a]["sentences"]),
+            ]
             for a in sorted(rows)
         ]
+        total_s = sum(r["sentences"] for r in rows.values())
+        total_t = sum(r["tokens"] for r in rows.values())
         table.append(
             [
                 "TOTAL",
                 len({w for r in rows.values() for w in r["works"]}),
-                sum(r["sentences"] for r in rows.values()),
-                sum(r["tokens"] for r in rows.values()),
+                total_s,
+                total_t,
+                _mean(total_t, total_s),
             ]
         )
         print(
             tabulate(
                 table,
-                headers=["Author", "Works", "Sentences", "Tokens"],
+                headers=["Author", "Works", "Sentences", "Tokens", "Mean Len"],
                 tablefmt="simple",
                 intfmt=",",
             )

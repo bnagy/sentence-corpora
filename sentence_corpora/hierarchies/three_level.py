@@ -118,7 +118,7 @@ class ThreeLevelCorpus:
         return samples, breakdown
 
     def stats(self) -> None:
-        """Print a table of works, sentences, and tokens per translator."""
+        """Print a table of works, sentences, tokens, and mean length per translator."""
         from tabulate import tabulate
 
         rows: dict[str, dict[str, Any]] = {}
@@ -130,22 +130,34 @@ class ThreeLevelCorpus:
             rows[t]["sentences"] += 1
             rows[t]["tokens"] += len(sentence.text.split())
 
+        def _mean(tokens: int, sentences: int) -> str:
+            return f"{tokens / sentences:.1f}" if sentences else "—"
+
         table = [
-            [t, len(rows[t]["works"]), rows[t]["sentences"], rows[t]["tokens"]]
+            [
+                t,
+                len(rows[t]["works"]),
+                rows[t]["sentences"],
+                rows[t]["tokens"],
+                _mean(rows[t]["tokens"], rows[t]["sentences"]),
+            ]
             for t in sorted(rows)
         ]
+        total_s = sum(r["sentences"] for r in rows.values())
+        total_t = sum(r["tokens"] for r in rows.values())
         table.append(
             [
                 "TOTAL",
                 len({w for r in rows.values() for w in r["works"]}),
-                sum(r["sentences"] for r in rows.values()),
-                sum(r["tokens"] for r in rows.values()),
+                total_s,
+                total_t,
+                _mean(total_t, total_s),
             ]
         )
         print(
             tabulate(
                 table,
-                headers=["Translator", "Works", "Sentences", "Tokens"],
+                headers=["Translator", "Works", "Sentences", "Tokens", "Mean Len"],
                 tablefmt="simple",
                 intfmt=",",
             )
