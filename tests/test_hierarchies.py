@@ -234,7 +234,7 @@ class TestThreeLevelCorpus:
             ),
         ]
         corpus = ThreeLevelCorpus(sentences)
-        assert corpus.get_levels() == ["translator", "author", "work"]
+        assert corpus.get_levels() == ["work", "author", "translator"]
 
     def test_get_unique_values(self):
         """Test getting unique values for a level."""

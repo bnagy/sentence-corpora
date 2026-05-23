@@ -44,8 +44,12 @@ class ThreeLevelCorpus:
         return f"ThreeLevelCorpus({len(self._corpus)} sentences)"
 
     def get_levels(self) -> list[str]:
-        """Return the hierarchy levels available in this corpus."""
-        return ["translator", "author", "work"]
+        """Return the hierarchy levels available in this corpus.
+
+        Ordered from lowest (work) to highest (translator), matching
+        the convention used by :class:`TwoLevelCorpus`.
+        """
+        return ["work", "author", "translator"]
 
     def get_unique_values(self, level: str) -> list[str]:
         """Get unique values for a specific hierarchy level."""
