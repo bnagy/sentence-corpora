@@ -145,8 +145,10 @@ class TwoLevelCorpus:
     @classmethod
     def from_pickle(cls, path: str) -> TwoLevelCorpus:
         """Load a corpus from a pickle file."""
-        corpus = Corpus.from_pickle(path)
-        return cls(corpus._sentences)
+        obj = Corpus.from_pickle(path)
+        if isinstance(obj, cls):
+            return obj
+        return cls(obj._sentences)
 
     def chunk_works(self, min_tokens: int) -> TwoLevelCorpus:
         """Chunk works into smaller pieces with at least min_tokens each."""

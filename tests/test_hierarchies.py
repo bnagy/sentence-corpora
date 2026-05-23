@@ -160,6 +160,8 @@ class TestTwoLevelCorpus:
         """Test pickling and unpickling TwoLevelCorpus."""
         sentences = [
             Sentence(text="Text 1", metadata={"work": "work1", "author": "author1"}),
+            Sentence(text="Text 2", metadata={"work": "work1", "author": "author1"}),
+            Sentence(text="Text 3", metadata={"work": "work2", "author": "author2"}),
         ]
         corpus = TwoLevelCorpus(sentences)
 
@@ -167,8 +169,16 @@ class TestTwoLevelCorpus:
         corpus.to_pickle(str(path))
 
         loaded = TwoLevelCorpus.from_pickle(str(path))
-        assert len(loaded) == 1
+        assert isinstance(loaded, TwoLevelCorpus)
+        assert len(loaded) == 3
         assert loaded[0].text == "Text 1"
+        # Verify the loaded corpus is fully functional
+        assert loaded.authors() == ["author1", "author2"]
+        assert loaded.works() == ["work1", "work2"]
+        # Verify sample_balanced works on loaded corpus
+        rng = np.random.default_rng(42)
+        samples, breakdown = loaded.sample_balanced(4, rng)
+        assert len(samples) > 0
 
     def test_chunk_works(self):
         """Test chunking works into smaller pieces."""
@@ -539,6 +549,14 @@ class TestThreeLevelCorpus:
                 text="Text 1",
                 metadata={"work": "work1", "author": "author1", "translator": "trans1"},
             ),
+            Sentence(
+                text="Text 2",
+                metadata={"work": "work1", "author": "author1", "translator": "trans1"},
+            ),
+            Sentence(
+                text="Text 3",
+                metadata={"work": "work2", "author": "author2", "translator": "trans2"},
+            ),
         ]
         corpus = ThreeLevelCorpus(sentences)
 
@@ -546,8 +564,16 @@ class TestThreeLevelCorpus:
         corpus.to_pickle(str(path))
 
         loaded = ThreeLevelCorpus.from_pickle(str(path))
-        assert len(loaded) == 1
+        assert isinstance(loaded, ThreeLevelCorpus)
+        assert len(loaded) == 3
         assert loaded[0].text == "Text 1"
+        # Verify the loaded corpus is fully functional
+        assert loaded.translators() == ["trans1", "trans2"]
+        assert loaded.works() == ["work1", "work2"]
+        # Verify sample_balanced works on loaded corpus
+        rng = np.random.default_rng(42)
+        samples, breakdown = loaded.sample_balanced(4, rng)
+        assert len(samples) > 0
 
     def test_repr(self):
         """Test repr output."""
