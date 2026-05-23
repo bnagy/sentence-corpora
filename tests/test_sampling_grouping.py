@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from sentence_corpora import Sentence
 from sentence_corpora.sampling import BalancedSampler
 
 from .sampling_fixture import realistic_sentences

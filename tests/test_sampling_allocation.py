@@ -114,7 +114,7 @@ class TestAllocateTokensEvenly:
 
     def test_zero_total_tokens(self) -> None:
         """All groups empty → zero allocation."""
-        groups = {"a": [], "b": []}
+        groups: dict[str, list[Sentence]] = {"a": [], "b": []}
         result = BalancedSampler._allocate_tokens_evenly(groups, 10)
         assert result["a"] == 0
         assert result["b"] == 0

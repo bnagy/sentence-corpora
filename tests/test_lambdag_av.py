@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import numpy as np
-import pytest
 
 from sentence_corpora import Sentence
 from sentence_corpora.hierarchies import ThreeLevelCorpus, TwoLevelCorpus

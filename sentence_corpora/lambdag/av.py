@@ -216,7 +216,7 @@ class LambdaGAV:
         ref_sentences_list = [
             s for s in kr_corpus if getattr(s, verification_level) != known_entity
         ]
-        ref_corpus = type(kr_corpus)(ref_sentences_list)
+        ref_corpus = type(kr_corpus)(ref_sentences_list)  # type: ignore[call-arg]
         reference_sentences_raw, ref_breakdown = ref_corpus.sample_balanced(
             reference_size, rng
         )

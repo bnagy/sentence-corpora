@@ -7,7 +7,7 @@ import numpy as np
 from sentence_corpora import Sentence
 from sentence_corpora.sampling import BalancedSampler
 
-from .sampling_fixture import sentence_tokens, total_tokens
+from .sampling_fixture import sentence_tokens
 
 
 class TestSampleSentencesGreedy:
