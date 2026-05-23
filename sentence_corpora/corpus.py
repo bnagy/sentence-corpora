@@ -115,30 +115,44 @@ class Corpus:
                     f"which is less than min_tokens={min_tokens}"
                 )
 
-            # Calculate number of chunks and per-chunk targets
+            # Use dynamic target chunking: after each chunk, recalculate
+            # the target size based on remaining tokens and remaining chunks.
+            # This keeps chunks as even as possible while ensuring each
+            # non-last chunk has at least min_tokens.
             num_chunks = total_tokens // min_tokens
-            base_tokens = total_tokens // num_chunks
-            remainder = total_tokens % num_chunks
-            # First `remainder` chunks get base_tokens + 1, rest get base_tokens
-            targets = [
-                base_tokens + (1 if i < remainder else 0) for i in range(num_chunks)
-            ]
+            if num_chunks == 0:
+                num_chunks = 1
 
-            # Use the shared greedy accumulator to split sentences into chunks.
-            # Deterministic (no shuffle) to preserve sentence order.
-            remaining = sentences
-            for chunk_idx, target in enumerate(targets):
-                selected, consumed = _greedy_accumulate(remaining, target)
+            remaining = list(sentences)
+            chunks_remaining = num_chunks
+            chunk_idx = 0
+
+            while remaining:
+                is_last = chunks_remaining <= 1
+                if is_last:
+                    # Last chunk gets all remaining sentences
+                    selected = remaining
+                    remaining = []
+                else:
+                    # Recalculate target based on what's left
+                    tokens_remaining = sum(len(s.text.split()) for s in remaining)
+                    target = tokens_remaining // chunks_remaining
+                    if target < min_tokens:
+                        target = min_tokens
+                    selected, _ = _greedy_accumulate(remaining, target, shuffle=False)
+                    remaining = remaining[len(selected) :]
+
+                chunk_idx += 1
                 for s in selected:
                     new_s = Sentence(
                         text=s.text,
                         metadata={
                             **s.metadata,
-                            work_level: f"{work}_{chunk_idx + 1}",
+                            work_level: f"{work}_{chunk_idx}",
                         },
                     )
                     new_sentences.append(new_s)
-                # Advance past consumed sentences for next chunk
-                remaining = remaining[len(selected) :]
+
+                chunks_remaining -= 1
 
         return Corpus(new_sentences)
