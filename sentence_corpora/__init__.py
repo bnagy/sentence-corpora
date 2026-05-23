@@ -36,7 +36,7 @@ Example usage:
     samples, breakdown = BalancedSampler.sample_balanced(
         grouped_sentences,
         levels=['author', 'work'],
-        total_samples=1000,
+        target_tokens=1000,
         rng=np.random.default_rng(42)
     )
 """

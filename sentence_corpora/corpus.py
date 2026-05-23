@@ -6,6 +6,7 @@ import pickle
 import random
 from collections.abc import Iterator
 
+from .sampling.balanced_sampler import _greedy_accumulate
 from .sentence import Sentence
 
 
@@ -114,33 +115,30 @@ class Corpus:
                     f"which is less than min_tokens={min_tokens}"
                 )
 
-            # Calculate number of chunks: we want to minimize chunks while ensuring
-            # each has at least min_tokens
-            # num_chunks = floor(total_tokens / min_tokens)
+            # Calculate number of chunks and per-chunk targets
             num_chunks = total_tokens // min_tokens
-
-            # Calculate target tokens per chunk (evenly distributed)
             base_tokens = total_tokens // num_chunks
             remainder = total_tokens % num_chunks
+            # First `remainder` chunks get base_tokens + 1, rest get base_tokens
+            targets = [
+                base_tokens + (1 if i < remainder else 0) for i in range(num_chunks)
+            ]
 
-            # Build chunks by iterating through sentences
-            chunk_idx = 0
-            current_tokens = 0
-            target = base_tokens + (1 if chunk_idx < remainder else 0)
-
-            for s in sentences:
-                new_s = Sentence(
-                    text=s.text,
-                    metadata={**s.metadata, work_level: f"{work}_{chunk_idx + 1}"},
-                )
-                new_sentences.append(new_s)
-                current_tokens += len(s.text.split())
-
-                # Move to next chunk when we've reached the target
-                # But only if we're not on the last chunk yet
-                if current_tokens >= target and chunk_idx < num_chunks - 1:
-                    chunk_idx += 1
-                    current_tokens = 0
-                    target = base_tokens + (1 if chunk_idx < remainder else 0)
+            # Use the shared greedy accumulator to split sentences into chunks.
+            # Deterministic (no shuffle) to preserve sentence order.
+            remaining = sentences
+            for chunk_idx, target in enumerate(targets):
+                selected, consumed = _greedy_accumulate(remaining, target)
+                for s in selected:
+                    new_s = Sentence(
+                        text=s.text,
+                        metadata={
+                            **s.metadata,
+                            work_level: f"{work}_{chunk_idx + 1}",
+                        },
+                    )
+                    new_sentences.append(new_s)
+                # Advance past consumed sentences for next chunk
+                remaining = remaining[len(selected) :]
 
         return Corpus(new_sentences)

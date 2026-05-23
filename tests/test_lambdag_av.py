@@ -168,8 +168,9 @@ class TestRunSingleAvProblemThreeLevel:
             known_entity="known",
             q_corpus=q_corpus,
             kr_corpus=kr_corpus,
-            known_size=5,
-            reference_size=5,
+            # Request enough tokens for ~5 sentences (each is 2 tokens)
+            known_size=12,
+            reference_size=12,
             seed=42,
         )
 
@@ -177,7 +178,8 @@ class TestRunSingleAvProblemThreeLevel:
         assert result["score"] == 1.5
         assert result["known_entity"] == "known"
         assert result["verification_level"] == "translator"
-        assert result["known_sentences_used"] == 5
+        # 12 tokens / 2 tokens per sentence = 6 sentences (with greedy overshoot)
+        assert result["known_sentences_used"] == 6
         assert result["unknown_sentences_used"] == 5
 
     @patch("sentence_corpora.lambdag.av.LambdaGMethod")
@@ -305,8 +307,9 @@ class TestRunSingleAvProblemTwoLevel:
             known_entity="known",
             q_corpus=q_corpus,
             kr_corpus=kr_corpus,
-            known_size=5,
-            reference_size=5,
+            # Request enough tokens for ~5 sentences (each is 2 tokens)
+            known_size=12,
+            reference_size=12,
             seed=42,
         )
 
@@ -314,7 +317,8 @@ class TestRunSingleAvProblemTwoLevel:
         assert result["score"] == 2.0
         assert result["known_entity"] == "known"
         assert result["verification_level"] == "author"
-        assert result["known_sentences_used"] == 5
+        # 12 tokens / 2 tokens per sentence = 6 sentences (with greedy overshoot)
+        assert result["known_sentences_used"] == 6
         assert result["unknown_sentences_used"] == 5
 
     @patch("sentence_corpora.lambdag.av.LambdaGMethod")

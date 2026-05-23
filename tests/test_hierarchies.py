@@ -97,7 +97,11 @@ class TestTwoLevelCorpus:
         assert corpus.authors() == ["author1", "author2"]
 
     def test_sample_balanced(self):
-        """Test balanced sampling."""
+        """Test balanced sampling (token-based).
+
+        Each sentence is 2 tokens. Requesting 8 tokens should yield
+        approximately 4 sentences (may be 3-5 due to greedy overshoot).
+        """
         sentences = [
             Sentence(text="Text 1", metadata={"work": "work1", "author": "author1"}),
             Sentence(text="Text 2", metadata={"work": "work1", "author": "author1"}),
@@ -110,12 +114,24 @@ class TestTwoLevelCorpus:
         corpus = TwoLevelCorpus(sentences)
         rng = np.random.default_rng(42)
 
-        samples, breakdown = corpus.sample_balanced(4, rng)
+        # 8 tokens requested; each sentence is 2 tokens → expect ~4 sentences
+        samples, breakdown = corpus.sample_balanced(8, rng)
 
-        assert len(samples) == 4
+        total_tokens = sum(len(s.text.split()) for s in samples)
+        assert total_tokens >= 8
         assert isinstance(samples[0], Sentence)
         assert "work1" in breakdown
         assert "work2" in breakdown
+
+        def _check_breakdown(node):
+            if isinstance(node, dict):
+                for child in node.values():
+                    _check_breakdown(child)
+            else:
+                assert isinstance(node, int)
+                assert node >= 0
+
+        _check_breakdown(breakdown)
 
     def test_stats(self, capsys):
         """Test stats method prints correct table."""
@@ -441,7 +457,11 @@ class TestThreeLevelCorpus:
         assert "TOTAL" in captured.out
 
     def test_sample_balanced_exclude_translator(self):
-        """Test balanced sampling with exclude_translator."""
+        """Test balanced sampling with exclude_translator (token-based).
+
+        Each sentence is 2 tokens. Requesting 4 tokens from trans2-only
+        corpus (2 sentences = 4 tokens) should return both trans2 sentences.
+        """
         sentences = [
             Sentence(
                 text="Text 1",
@@ -463,7 +483,8 @@ class TestThreeLevelCorpus:
         corpus = ThreeLevelCorpus(sentences)
         rng = np.random.default_rng(42)
 
-        samples, breakdown = corpus.sample_balanced(2, rng, exclude_translator="trans1")
+        # 4 tokens = 2 sentences (each is 2 tokens)
+        samples, breakdown = corpus.sample_balanced(4, rng, exclude_translator="trans1")
 
         assert len(samples) == 2
         assert all(s.translator != "trans1" for s in samples)

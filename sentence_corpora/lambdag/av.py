@@ -170,8 +170,8 @@ class LambdaGAV:
             q_corpus: Corpus of the unknown/question text.
             kr_corpus: Combined known + reference corpus containing all
                 entities' sentences.
-            known_size: Sentences to sample from the known entity.
-            reference_size: Sentences for the reference set.
+            known_size: Minimum tokens to sample from the known entity.
+            reference_size: Minimum tokens for the reference set.
             order: N-gram order (defaults to instance value).
             num_references: Passed to LambdaGMethod (defaults to instance
                 value).

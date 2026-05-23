@@ -72,22 +72,23 @@ class TwoLevelCorpus:
         return self.get_unique_values("author")
 
     def sample_balanced(
-        self, total: int, rng: np.random.Generator
+        self, target_tokens: int, rng: np.random.Generator
     ) -> tuple[list[Sentence], dict]:
-        """Sample sentences balanced across works and authors.
+        """Sample sentences balanced across works and authors by token count.
 
         Args:
-            total: Total number of sentences to sample.
+            target_tokens: Minimum number of tokens to sample.
             rng: NumPy random generator.
 
         Returns:
-            Tuple of (sampled_sentences, breakdown_dict).
+            Tuple of (sampled_sentences, breakdown_dict). Breakdown values
+            are token counts.
         """
         grouped = BalancedSampler.group_by_levels(
             self._corpus._sentences, ["work", "author"]
         )
         samples, breakdown = BalancedSampler.sample_balanced(
-            grouped, ["work", "author"], total, rng, return_sentences=True
+            grouped, ["work", "author"], target_tokens, rng, return_sentences=True
         )
         return samples, breakdown
 

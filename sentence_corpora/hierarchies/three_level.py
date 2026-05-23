@@ -86,19 +86,20 @@ class ThreeLevelCorpus:
 
     def sample_balanced(
         self,
-        total: int,
+        target_tokens: int,
         rng: np.random.Generator,
         exclude_translator: str | None = None,
     ) -> tuple[list[Sentence], dict]:
-        """Sample sentences balanced across translators, authors, and works.
+        """Sample sentences balanced across translators, authors, and works by token count.
 
         Args:
-            total: Total number of sentences to sample.
+            target_tokens: Minimum number of tokens to sample.
             rng: NumPy random generator.
             exclude_translator: Optional translator name to exclude.
 
         Returns:
-            Tuple of (sampled_sentences, breakdown_dict).
+            Tuple of (sampled_sentences, breakdown_dict). Breakdown values
+            are token counts.
         """
         sentences = self._corpus._sentences
         if exclude_translator is not None:
@@ -110,7 +111,7 @@ class ThreeLevelCorpus:
         samples, breakdown = BalancedSampler.sample_balanced(
             grouped,
             ["translator", "author", "work"],
-            total,
+            target_tokens,
             rng,
             return_sentences=True,
         )
