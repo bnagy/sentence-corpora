@@ -288,3 +288,109 @@ class TestCorpus:
         work_counts = Counter(s.metadata["work"] for s in chunked)
         for count in work_counts.values():
             assert count == 2, f"Expected 2 sentences per chunk, got {count}"
+
+    def test_chunk_works_no_author_collisions(self):
+        """Test that chunks never mix sentences from different authors.
+
+        When two authors have works with the same name, chunk_works must
+        keep their sentences in separate chunks. The (author, work) pair
+        should be unique per chunk.
+        """
+        sentences = [
+            Sentence(text="a " * 500, metadata={"work": "shared", "author": "A1"}),
+            Sentence(text="b " * 500, metadata={"work": "shared", "author": "A1"}),
+            Sentence(text="c " * 500, metadata={"work": "shared", "author": "A2"}),
+            Sentence(text="d " * 500, metadata={"work": "shared", "author": "A2"}),
+        ]
+        corpus = Corpus(sentences)
+        chunked = corpus.chunk_works(100)
+
+        # Group by (author, work) pair — each should be unique
+        from collections import defaultdict
+
+        seen_pairs = set()
+        for s in chunked:
+            pair = (s.author, s.work)
+            assert pair not in seen_pairs, f"Duplicate (author, work) pair: {pair}"
+            seen_pairs.add(pair)
+
+        # Each (author, work) chunk should have sentences from only one author
+        chunk_sents = defaultdict(list)
+        for s in chunked:
+            chunk_sents[(s.author, s.work)].append(s)
+        for (author, work_name), sents in chunk_sents.items():
+            authors = set(s.author for s in sents)
+            assert (
+                len(authors) == 1
+            ), f"Chunk ({author}, {work_name}) has mixed authors: {authors}"
+
+        # All sentences should be preserved
+        assert len(chunked) == 4
+
+    def test_chunk_works_no_translator_collisions(self):
+        """Test that chunks never mix sentences from different translators.
+
+        Three-level corpora (translator/author/work) must keep all three
+        levels separate when chunking. The (translator, author, work) tuple
+        should be unique per chunk.
+        """
+        sentences = [
+            Sentence(
+                text="a " * 500,
+                metadata={
+                    "work": "shared",
+                    "author": "Aristoteles",
+                    "translator": "T1",
+                },
+            ),
+            Sentence(
+                text="b " * 500,
+                metadata={
+                    "work": "shared",
+                    "author": "Aristoteles",
+                    "translator": "T1",
+                },
+            ),
+            Sentence(
+                text="c " * 500,
+                metadata={
+                    "work": "shared",
+                    "author": "Aristoteles",
+                    "translator": "T2",
+                },
+            ),
+            Sentence(
+                text="d " * 500,
+                metadata={
+                    "work": "shared",
+                    "author": "Aristoteles",
+                    "translator": "T2",
+                },
+            ),
+        ]
+        corpus = Corpus(sentences)
+        chunked = corpus.chunk_works(100)
+
+        # Group by (translator, author, work) tuple — each should be unique
+        seen_tuples = set()
+        for s in chunked:
+            tup = (s.translator, s.author, s.work)
+            assert (
+                tup not in seen_tuples
+            ), f"Duplicate (translator, author, work) tuple: {tup}"
+            seen_tuples.add(tup)
+
+        # Each (translator, author, work) chunk should have sentences from only one translator
+        from collections import defaultdict
+
+        chunk_sents = defaultdict(list)
+        for s in chunked:
+            chunk_sents[(s.translator, s.author, s.work)].append(s)
+        for (translator, author, work_name), sents in chunk_sents.items():
+            translators = set(s.translator for s in sents)
+            assert (
+                len(translators) == 1
+            ), f"Chunk ({translator}, {author}, {work_name}) has mixed translators: {translators}"
+
+        # All sentences should be preserved
+        assert len(chunked) == 4

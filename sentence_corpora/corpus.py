@@ -97,17 +97,44 @@ class Corpus:
 
         work_level = levels[0]  # First level is the work level
 
-        # Group sentences by work
-        by_work: dict[str, list[Sentence]] = {}
+        # Group sentences by the full hierarchy tuple to avoid collisions.
+        # For two-level corpora this is (work, author); for three-level it's
+        # (work, author, translator). Chunks must never mix sentences from
+        # different hierarchy entities.
+        by_work: dict[tuple, list[Sentence]] = {}
         for s in self._sentences:
             work = s.metadata.get(work_level)
-            if isinstance(work, str):
-                if work not in by_work:
-                    by_work[work] = []
-                by_work[work].append(s)
+            if not isinstance(work, str):
+                continue
+            # Build grouping key from all hierarchy levels except work
+            key_parts = [work]
+            for level in levels[1:]:
+                key_parts.append(str(s.metadata.get(level, "")))
+            key = tuple(key_parts)
+            if key not in by_work:
+                by_work[key] = []
+            by_work[key].append(s)
 
         new_sentences = []
-        for work, sentences in by_work.items():
+        for key, sentences in by_work.items():
+            work = key[0]
+
+            # Defensive check: verify all sentences in this group share the
+            # same hierarchy metadata. This should always pass since we
+            # grouped by the full tuple, but guards against future bugs.
+            if len(key) > 1:
+                for level_idx, level in enumerate(levels[1:], 1):
+                    expected = key[level_idx]
+                    for s in sentences:
+                        actual = str(s.metadata.get(level, ""))
+                        if actual != expected:
+                            raise AssertionError(
+                                f"Chunking integrity violation: sentences with "
+                                f"different '{level}' values ({expected!r} vs "
+                                f"{actual!r}) were mixed into the same chunk "
+                                f"for work {work!r}"
+                            )
+
             total_tokens = sum(len(s.text.split()) for s in sentences)
             if total_tokens < min_tokens:
                 raise ValueError(
