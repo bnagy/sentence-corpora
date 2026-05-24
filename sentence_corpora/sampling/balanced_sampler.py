@@ -155,6 +155,10 @@ class BalancedSampler:
         breakdown: dict = {}
 
         for key, allocated_tokens in allocations.items():
+            # Skip groups with nothing to sample
+            if allocated_tokens <= 0:
+                continue
+
             current_level_data = grouped_sentences[key]
 
             if rest_levels and isinstance(current_level_data, dict):
