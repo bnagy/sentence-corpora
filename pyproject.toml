@@ -54,5 +54,9 @@ source = ["sentence_corpora"]
 module = ["lambdag"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["tabulate"]
+ignore_missing_imports = true
+
 [tool.coverage.report]
 show_missing = true

@@ -6,8 +6,22 @@ import pickle
 import random
 from collections.abc import Iterator
 
-from .sampling.balanced_sampler import _greedy_accumulate
 from .sentence import Sentence
+
+
+def _balanced_loss(sizes: list[int], min_tokens: int) -> float:
+    """Compute balanced loss: average of evenness and min-size losses.
+
+    evenness_loss = mean squared deviation from actual mean chunk size
+    min_size_loss = mean squared deviation from min_tokens (only below-min chunks)
+    """
+    if not sizes:
+        return 0.0
+    n = len(sizes)
+    mean_size = sum(sizes) / n
+    evenness = sum((sz - mean_size) ** 2 for sz in sizes) / n
+    min_loss = sum((min_tokens - sz) ** 2 for sz in sizes if sz < min_tokens) / n
+    return 0.5 * evenness + 0.5 * min_loss
 
 
 class Corpus:
@@ -79,6 +93,16 @@ class Corpus:
     def chunk_works(self, min_tokens: int) -> Corpus:
         """Chunk works into smaller pieces with at least min_tokens each.
 
+        Uses a two-phase approach:
+        1. Greedy accumulation with backward merge: forward accumulate sentences
+           until >= min_tokens, finalize chunk, repeat. The last chunk (remainder)
+           is merged backward into the previous chunk, guaranteeing all chunks
+           >= min_tokens.
+        2. Ripple optimization: iterate right-to-left over chunks, trying to move
+           the first sentence of each chunk backward. Accept moves that reduce
+           the balanced loss (evenness + min-size) without dropping any chunk
+           below floor (0.8 * min_tokens).
+
         Args:
             min_tokens: Minimum number of tokens per chunk.
 
@@ -98,15 +122,11 @@ class Corpus:
         work_level = levels[0]  # First level is the work level
 
         # Group sentences by the full hierarchy tuple to avoid collisions.
-        # For two-level corpora this is (work, author); for three-level it's
-        # (work, author, translator). Chunks must never mix sentences from
-        # different hierarchy entities.
         by_work: dict[tuple, list[Sentence]] = {}
         for s in self._sentences:
             work = s.metadata.get(work_level)
             if not isinstance(work, str):
                 continue
-            # Build grouping key from all hierarchy levels except work
             key_parts = [work]
             for level in levels[1:]:
                 key_parts.append(str(s.metadata.get(level, "")))
@@ -115,13 +135,12 @@ class Corpus:
                 by_work[key] = []
             by_work[key].append(s)
 
-        new_sentences = []
+        new_sentences: list[Sentence] = []
         for key, sentences in by_work.items():
             work = key[0]
 
             # Defensive check: verify all sentences in this group share the
-            # same hierarchy metadata. This should always pass since we
-            # grouped by the full tuple, but guards against future bugs.
+            # same hierarchy metadata.
             if len(key) > 1:
                 for level_idx, level in enumerate(levels[1:], 1):
                     expected = key[level_idx]
@@ -142,35 +161,15 @@ class Corpus:
                     f"which is less than min_tokens={min_tokens}"
                 )
 
-            # Use dynamic target chunking: after each chunk, recalculate
-            # the target size based on remaining tokens and remaining chunks.
-            # This keeps chunks as even as possible while ensuring each
-            # non-last chunk has at least min_tokens.
-            num_chunks = total_tokens // min_tokens
-            if num_chunks == 0:
-                num_chunks = 1
+            # Phase 1: Greedy accumulation with backward merge
+            chunks = self._greedy_backward_merge(sentences, min_tokens)
 
-            remaining = list(sentences)
-            chunks_remaining = num_chunks
-            chunk_idx = 0
+            # Phase 2: Ripple optimization
+            self._ripple_optimize(chunks, min_tokens)
 
-            while remaining:
-                is_last = chunks_remaining <= 1
-                if is_last:
-                    # Last chunk gets all remaining sentences
-                    selected = remaining
-                    remaining = []
-                else:
-                    # Recalculate target based on what's left
-                    tokens_remaining = sum(len(s.text.split()) for s in remaining)
-                    target = tokens_remaining // chunks_remaining
-                    if target < min_tokens:
-                        target = min_tokens
-                    selected, _ = _greedy_accumulate(remaining, target, shuffle=False)
-                    remaining = remaining[len(selected) :]
-
-                chunk_idx += 1
-                for s in selected:
+            # Build output sentences with chunk metadata
+            for chunk_idx, chunk in enumerate(chunks, 1):
+                for s in chunk:
                     new_s = Sentence(
                         text=s.text,
                         metadata={
@@ -180,6 +179,86 @@ class Corpus:
                     )
                     new_sentences.append(new_s)
 
-                chunks_remaining -= 1
-
         return Corpus(new_sentences)
+
+    @staticmethod
+    def _greedy_backward_merge(
+        sentences: list[Sentence], min_tokens: int
+    ) -> list[list[Sentence]]:
+        """Forward accumulation with backward merge of the last chunk.
+
+        Accumulates sentences until sum >= min_tokens, then finalizes the chunk.
+        The final remainder (if any) is merged into the previous chunk.
+        This guarantees every chunk has >= min_tokens.
+        """
+        chunks: list[list[Sentence]] = []
+        current: list[Sentence] = []
+        acc = 0
+        for s in sentences:
+            current.append(s)
+            acc += len(s.text.split())
+            if acc >= min_tokens:
+                chunks.append(current)
+                current = []
+                acc = 0
+        if current:
+            if chunks:
+                chunks[-1].extend(current)
+            else:
+                chunks.append(current)
+        return chunks
+
+    @staticmethod
+    def _ripple_optimize(
+        chunks: list[list[Sentence]], min_tokens: int
+    ) -> None:
+        """Optimize chunk sizes by rippling sentences backward.
+
+        Iterates right-to-left over chunks. For each chunk, tries moving its
+        first sentence backward to the previous chunk. Accepts the move if it
+        reduces the balanced loss and the source chunk stays >= floor
+        (0.8 * min_tokens). After accepting, tries again from the same chunk.
+        Repeats full passes until no moves are accepted.
+
+        Modifies chunks in place.
+        """
+        floor = int(min_tokens * 0.8)
+        if len(chunks) <= 1:
+            return
+
+        sizes = [sum(len(c.text.split()) for c in chunk) for chunk in chunks]
+
+        for _ in range(len(chunks) * 20):
+            moved_any = False
+            i = len(chunks) - 1
+            while i >= 1:
+                if len(chunks[i]) <= 1:
+                    i -= 1
+                    continue
+
+                sent_sz = len(chunks[i][0].text.split())
+                new_src = sizes[i] - sent_sz
+
+                if new_src < floor:
+                    i -= 1
+                    continue
+
+                # Compute balanced loss before and after the move
+                old_loss = _balanced_loss(sizes, min_tokens)
+                test_sizes = list(sizes)
+                test_sizes[i] = new_src
+                test_sizes[i - 1] += sent_sz
+                new_loss = _balanced_loss(test_sizes, min_tokens)
+
+                if new_loss < old_loss - 1e-9:
+                    moved = chunks[i].pop(0)
+                    chunks[i - 1].append(moved)
+                    sizes[i] = new_src
+                    sizes[i - 1] += sent_sz
+                    moved_any = True
+                    # Don't decrement i -- try to ripple more from same chunk
+                else:
+                    i -= 1
+
+            if not moved_any:
+                break
