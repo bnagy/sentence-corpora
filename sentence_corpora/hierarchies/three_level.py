@@ -61,10 +61,7 @@ class ThreeLevelCorpus:
                 stacklevel=2,
             )
         else:
-            raise ValueError(
-                "Cannot auto-detect levels from empty sentence list. "
-                "Pass levels explicitly."
-            )
+            self._levels = ("translator", "author", "work")
 
     @property
     def levels(self) -> tuple[str, str, str]:

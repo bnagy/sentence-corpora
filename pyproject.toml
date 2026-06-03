@@ -48,6 +48,7 @@ addopts = ["--cov=sentence_corpora", "--cov-report=term-missing", "--cov-fail-un
 
 [tool.coverage.run]
 source = ["sentence_corpora"]
+omit = ["sentence_corpora/lambdag/*"]
 
 [tool.mypy]
 [[tool.mypy.overrides]]
@@ -57,6 +58,3 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["tabulate"]
 ignore_missing_imports = true
-
-[tool.coverage.report]
-show_missing = true

@@ -61,10 +61,7 @@ class TwoLevelCorpus:
                 stacklevel=2,
             )
         else:
-            raise ValueError(
-                "Cannot auto-detect levels from empty sentence list. "
-                "Pass levels explicitly."
-            )
+            self._levels = ("author", "work")
 
     @property
     def levels(self) -> tuple[str, str]:
@@ -95,18 +92,6 @@ class TwoLevelCorpus:
         """Filter corpus by a specific level and value."""
         filtered = self._corpus.filter_by_level(level, value)
         return TwoLevelCorpus(filtered._sentences, levels=self._levels)
-
-    def by_work(self, work: str) -> TwoLevelCorpus:
-        """Return a sub-corpus filtered to a single work."""
-        return self.filter_by_level("work", work)
-
-    def by_author(self, author: str) -> TwoLevelCorpus:
-        """Return a sub-corpus filtered to a single author."""
-        return self.filter_by_level("author", author)
-
-
-
-
 
     def sample_balanced(
         self,

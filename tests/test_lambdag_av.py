@@ -35,13 +35,14 @@ def _make_corpus_3level() -> ThreeLevelCorpus:
         + _make_sentences_3level(10, translator="known", author="a2", work="w2")
         + _make_sentences_3level(10, translator="other", author="a3", work="w3")
     )
-    return ThreeLevelCorpus(sentences)
+    return ThreeLevelCorpus(sentences, levels=("translator", "author", "work"))
 
 
 def _make_q_corpus_3level() -> ThreeLevelCorpus:
     """Create a small three-level q_corpus."""
     return ThreeLevelCorpus(
-        _make_sentences_3level(5, translator="unknown", author="a1", work="w1")
+        _make_sentences_3level(5, translator="unknown", author="a1", work="w1"),
+        levels=("translator", "author", "work"),
     )
 
 
@@ -70,12 +71,15 @@ def _make_corpus_2level() -> TwoLevelCorpus:
         + _make_sentences_2level(10, author="known", work="w2")
         + _make_sentences_2level(10, author="other", work="w3")
     )
-    return TwoLevelCorpus(sentences)
+    return TwoLevelCorpus(sentences, levels=("author", "work"))
 
 
 def _make_q_corpus_2level() -> TwoLevelCorpus:
     """Create a small two-level q_corpus."""
-    return TwoLevelCorpus(_make_sentences_2level(5, author="unknown", work="w1"))
+    return TwoLevelCorpus(
+        _make_sentences_2level(5, author="unknown", work="w1"),
+        levels=("author", "work"),
+    )
 
 
 class TestLambdaGAVInit:
@@ -411,7 +415,7 @@ class TestRunSingleAvProblemTwoLevel:
         mock_method_cls.return_value = mock_instance
 
         kr_corpus = _make_corpus_2level()
-        q_corpus = TwoLevelCorpus([])
+        q_corpus = TwoLevelCorpus([], levels=("author", "work"))
 
         av = LambdaGAV()
         result = av.run_single_av_problem(

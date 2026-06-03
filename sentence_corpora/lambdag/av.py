@@ -197,7 +197,7 @@ class LambdaGAV:
         levels = kr_corpus.get_levels()
         if not levels:
             return {"error": "Corpus has no hierarchy levels"}
-        verification_level = levels[-1]
+        verification_level = levels[0]
 
         # Step 1: extract known corpus and sample
         k_corpus = kr_corpus.filter_by_level(verification_level, known_entity)
