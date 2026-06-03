@@ -1,10 +1,10 @@
 """LambdaG Authorship Verification module.
 
-Provides a simple interface for running authorship/translator verification
+Provides a simple interface for running authorship verification
 problems using the LambdaG method with balanced sentence sampling.
 
 Works with any corpus hierarchy (two-level or three-level). The verification
-level (author, translator, etc.) is inferred automatically from the corpus.
+level (author, translator, meter, etc.) is inferred automatically from the corpus.
 """
 
 from __future__ import annotations
@@ -38,11 +38,11 @@ class LambdaGAV:
     """Run LambdaG authorship verification with balanced sampling.
 
     Works with any corpus hierarchy (two-level or three-level). The
-    verification level — the highest-level entity being tested (e.g.
-    translator or author) — is inferred from ``corpus.get_levels()[-1]``.
+    verification level — the highest-level entity being tested — is
+    inferred from ``corpus.get_levels()[-1]``.
 
     Examples:
-        Three-level (translator verification)::
+        Three-level (e.g., translator verification)::
 
             >>> av = LambdaGAV()
             >>> result = av.run_single_av_problem(
@@ -53,7 +53,7 @@ class LambdaGAV:
             ...     reference_size=5000,
             ... )
 
-        Two-level (author verification)::
+        Two-level (e.g., author verification)::
 
             >>> av = LambdaGAV()
             >>> result = av.run_single_av_problem(

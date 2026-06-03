@@ -12,7 +12,7 @@ The `sentence-corpora` package provides tools for managing sentence corpora with
 
 ## Features
 
-- **Flexible hierarchy support**: Handle 2-3 hierarchy levels (e.g., work/author, work/author/translator)
+- **Flexible hierarchy support**: Handle 2-3 hierarchy levels with configurable names (e.g., work/author/translator, work/author/meter)
 - **Balanced sampling**: Algorithms that distribute samples evenly across hierarchy levels
 - **Composition-based design**: Hierarchy wrappers use composition to avoid dataclass inheritance issues
 
@@ -59,6 +59,19 @@ sentences = [
     Sentence(text="Some text...", metadata={"work": "work1", "author": "author1", "translator": "trans1"}),
 ]
 corpus = ThreeLevelCorpus(sentences)
+# Default levels: ("work", "author", "translator")
+```
+
+#### Custom Level Names
+
+For hierarchies with different third-level names (e.g., "meter" instead of "translator"), pass levels explicitly:
+
+```python
+sentences = [
+    Sentence(text="Some text...", metadata={"work": "work1", "author": "author1", "meter": "dactylic"}),
+]
+corpus = ThreeLevelCorpus(sentences, levels=("work", "author", "meter"))
+print(corpus.get_levels())  # ["work", "author", "meter"]
 ```
 
 ### Balanced Sampling
@@ -68,13 +81,13 @@ import numpy as np
 from sentence_corpora.sampling import BalancedSampler
 
 # Group sentences by hierarchy levels
-grouped = BalancedSampler.group_by_levels(corpus, ['translator', 'author', 'work'])
+grouped = BalancedSampler.group_by_levels(corpus, ['author', 'work'])
 
 # Sample balanced across all levels
 samples, breakdown = BalancedSampler.sample_balanced(
     grouped,
-    levels=['translator', 'author', 'work'],
-    total_samples=1000,
+    levels=['author', 'work'],
+    target_tokens=1000,
     rng=np.random.default_rng(42)
 )
 ```
@@ -86,9 +99,9 @@ from sentence_corpora.lambdag import LambdaGAV
 
 av = LambdaGAV()
 result = av.run_single_av_problem(
-    known_translator="Guillelmus de Morbeka",
-    unknown_corpus=nile_corpus,
-    reference_corpus=train_corpus,
+    known_entity="Guillelmus de Morbeka",
+    q_corpus=nile_corpus,
+    kr_corpus=train_corpus,
     known_size=1000,
     reference_size=5000,
 )
@@ -104,7 +117,7 @@ sentence_corpora/
 ├── corpus.py            # Corpus container class
 ├── hierarchies/         # Hierarchy-specific wrappers
 │   ├── two_level.py     # Two-level hierarchy (work/author)
-│   └── three_level.py   # Three-level hierarchy (work/author/translator)
+│   └── three_level.py   # Three-level hierarchy (configurable levels)
 ├── sampling/            # Sampling algorithms
 │   └── balanced_sampler.py
 └── lambdag/             # LambdaG authorship verification

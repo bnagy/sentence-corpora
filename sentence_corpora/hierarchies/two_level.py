@@ -1,12 +1,18 @@
-"""Two-level hierarchy implementation (work/author) for sentence-corpora package.
+"""Two-level hierarchy implementation for sentence-corpora package.
 
 This module provides a convenience wrapper around the base Corpus class
-for two-level hierarchies (work/author). It uses composition to add
-convenience methods without inheritance issues.
+for two-level hierarchies. It uses composition to add convenience
+methods without inheritance issues.
+
+The two levels are configurable, ordered from highest to lowest in the
+has-many nesting (e.g., ``("author", "work")``). If *levels* is not
+passed explicitly, they are auto-detected from the first sentence's
+metadata keys.
 """
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 import numpy as np
@@ -17,18 +23,53 @@ from ..sentence import Sentence
 
 
 class TwoLevelCorpus:
-    """Corpus with two-level hierarchy (work/author).
+    """Corpus with two-level hierarchy.
 
     This class wraps a base Corpus and provides two-level specific
     convenience methods. It uses composition rather than inheritance
     to avoid dataclass issues.
 
     Args:
-        sentences: List of sentences with 'work' and 'author' metadata.
+        sentences: List of sentences with metadata keys matching *levels*.
+        levels: Tuple of two level names, from highest to lowest in the
+            has-many nesting (e.g., ``("author", "work")``).
+            If not provided, levels are auto-detected from the first
+            sentence's metadata keys. A warning is emitted. Explicit is
+            recommended.
     """
 
-    def __init__(self, sentences: list[Sentence]) -> None:
+    def __init__(
+        self,
+        sentences: list[Sentence],
+        levels: tuple[str, str] | None = None,
+    ) -> None:
         self._corpus = Corpus(sentences)
+        if levels is not None:
+            self._levels = levels
+        elif sentences:
+            detected = tuple(sentences[0].metadata.keys())
+            if len(detected) != 2:
+                raise ValueError(
+                    f"Expected exactly 2 metadata keys for TwoLevelCorpus, "
+                    f"got {len(detected)}: {detected}. Pass levels explicitly."
+                )
+            self._levels = detected  # type: ignore[assignment]
+            warnings.warn(
+                f"TwoLevelCorpus: auto-detected levels {detected} from "
+                f"sentence metadata keys (assumed highest-to-lowest). "
+                f"Pass levels= explicitly to suppress this warning.",
+                stacklevel=2,
+            )
+        else:
+            raise ValueError(
+                "Cannot auto-detect levels from empty sentence list. "
+                "Pass levels explicitly."
+            )
+
+    @property
+    def levels(self) -> tuple[str, str]:
+        """The two level names, from highest to lowest."""
+        return self._levels
 
     def __len__(self) -> int:
         return len(self._corpus)
@@ -44,7 +85,7 @@ class TwoLevelCorpus:
 
     def get_levels(self) -> list[str]:
         """Return the hierarchy levels available in this corpus."""
-        return ["work", "author"]
+        return list(self._levels)
 
     def get_unique_values(self, level: str) -> list[str]:
         """Get unique values for a specific hierarchy level."""
@@ -53,7 +94,7 @@ class TwoLevelCorpus:
     def filter_by_level(self, level: str, value: str) -> TwoLevelCorpus:
         """Filter corpus by a specific level and value."""
         filtered = self._corpus.filter_by_level(level, value)
-        return TwoLevelCorpus(filtered._sentences)
+        return TwoLevelCorpus(filtered._sentences, levels=self._levels)
 
     def by_work(self, work: str) -> TwoLevelCorpus:
         """Return a sub-corpus filtered to a single work."""
@@ -63,32 +104,38 @@ class TwoLevelCorpus:
         """Return a sub-corpus filtered to a single author."""
         return self.filter_by_level("author", author)
 
-    def works(self) -> list[str]:
-        """Return list of unique works."""
-        return self.get_unique_values("work")
 
-    def authors(self) -> list[str]:
-        """Return list of unique authors."""
-        return self.get_unique_values("author")
+
+
 
     def sample_balanced(
-        self, target_tokens: int, rng: np.random.Generator
+        self,
+        target_tokens: int,
+        rng: np.random.Generator,
+        exclude: tuple[str, str] | None = None,
     ) -> tuple[list[Sentence], dict]:
-        """Sample sentences balanced across works and authors by token count.
+        """Sample sentences balanced across both levels by token count.
 
         Args:
             target_tokens: Minimum number of tokens to sample.
             rng: NumPy random generator.
+            exclude: Optional ``(level, value)`` tuple to exclude from sampling.
 
         Returns:
             Tuple of (sampled_sentences, breakdown_dict). Breakdown values
             are token counts.
         """
-        grouped = BalancedSampler.group_by_levels(
-            self._corpus._sentences, ["work", "author"]
-        )
+        sentences = self._corpus._sentences
+        if exclude is not None:
+            exclude_level, exclude_value = exclude
+            sentences = [
+                s
+                for s in sentences
+                if s.metadata.get(exclude_level) != exclude_value
+            ]
+        grouped = BalancedSampler.group_by_levels(sentences, list(self._levels))
         samples, breakdown = BalancedSampler.sample_balanced(
-            grouped, ["work", "author"], target_tokens, rng, return_sentences=True
+            grouped, list(self._levels), target_tokens, rng, return_sentences=True
         )
         return samples, breakdown
 
@@ -143,14 +190,25 @@ class TwoLevelCorpus:
         self._corpus.to_pickle(path)
 
     @classmethod
-    def from_pickle(cls, path: str) -> TwoLevelCorpus:
-        """Load a corpus from a pickle file."""
+    def from_pickle(
+        cls,
+        path: str,
+        levels: tuple[str, str] | None = None,
+    ) -> TwoLevelCorpus:
+        """Load a corpus from a pickle file.
+
+        Args:
+            path: Path to the pickle file.
+            levels: Level names to use. If not provided, levels are
+                auto-detected from the first sentence's metadata keys.
+                A warning is emitted. Explicit is recommended.
+        """
         obj = Corpus.from_pickle(path)
         if isinstance(obj, cls):
             return obj
-        return cls(obj._sentences)
+        return cls(obj._sentences, levels=levels)
 
     def chunk_works(self, min_tokens: int) -> TwoLevelCorpus:
         """Chunk works into smaller pieces with at least min_tokens each."""
         chunked = self._corpus.chunk_works(min_tokens)
-        return TwoLevelCorpus(chunked._sentences)
+        return TwoLevelCorpus(chunked._sentences, levels=self._levels)

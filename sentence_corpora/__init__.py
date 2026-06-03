@@ -13,7 +13,7 @@ Example usage:
     ]
     corpus = Corpus(sentences)
 
-    # For two-level hierarchies (e.g., classical texts with work/author)
+    # For two-level hierarchies (e.g., work/author)
     from sentence_corpora.hierarchies import TwoLevelCorpus
 
     sentences = [
@@ -21,13 +21,16 @@ Example usage:
     ]
     corpus = TwoLevelCorpus(sentences)
 
-    # For three-level hierarchies (e.g., nile project with work/author/translator)
+    # For three-level hierarchies (e.g., work/author/translator)
     from sentence_corpora.hierarchies import ThreeLevelCorpus
 
     sentences = [
         Sentence(text="Some text...", metadata={"work": "work1", "author": "author1", "translator": "trans1"}),
     ]
     corpus = ThreeLevelCorpus(sentences)
+
+    # With custom level names (e.g., work/author/meter)
+    corpus = ThreeLevelCorpus(sentences, levels=("work", "author", "meter"))
 
     # Using balanced sampling
     import numpy as np
