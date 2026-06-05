@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sentence-corpora"
-version = "0.2.0"
+version = "0.2.1"
 description = "Flexible sentence corpus handling with hierarchical sampling"
 readme = "README.md"
 license = { text = "MIT" }
