@@ -170,15 +170,17 @@ class TestExactScoreRegression:
         - 3 translators x 3 works x 50 sentences each
         - q_corpus: 5 sentences from an unknown translator
 
-        Sentences are selected with a fixed seed (99) from the nile train_corpus.
+        Sentences are extracted from the nile train corpus (seed 99) and
+        shipped as tests/fixtures/regression_fixture.pkl.
         """
         import pickle
-        with open("/Users/ben/code/nile/train_corpus.pkl", "rb") as f:
-            train = pickle.load(f)
+        import os
 
-        all_sentences = list(train)
-        rng = np.random.default_rng(99)
-        rng.shuffle(all_sentences)
+        fixture_path = os.path.join(
+            os.path.dirname(__file__), "fixtures", "regression_fixture.pkl"
+        )
+        with open(fixture_path, "rb") as f:
+            texts = pickle.load(f)
 
         translator_names = ["translator_A", "translator_B", "translator_C"]
         work_names = ["work_1", "work_2", "work_3"]
@@ -189,10 +191,9 @@ class TestExactScoreRegression:
         for t_name in translator_names:
             for w_name in work_names:
                 for _ in range(sentences_per_work):
-                    s = all_sentences[idx]
                     kr_sentences.append(
                         Sentence(
-                            text=s.text,
+                            text=texts[idx],
                             metadata={
                                 "translator": t_name,
                                 "author": f"author_{t_name}",
@@ -208,10 +209,9 @@ class TestExactScoreRegression:
 
         q_sentences = []
         for i in range(5):
-            s = all_sentences[idx + i]
             q_sentences.append(
                 Sentence(
-                    text=s.text,
+                    text=texts[idx + i],
                     metadata={
                         "translator": "unknown",
                         "author": "author_unknown",
