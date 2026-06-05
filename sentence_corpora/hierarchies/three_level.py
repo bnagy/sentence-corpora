@@ -98,40 +98,70 @@ class ThreeLevelCorpus:
 
     def sample_balanced(
         self,
-        target_tokens: int,
+        *,
+        sentences: int | None = None,
+        tokens: int | None = None,
         rng: np.random.Generator,
         exclude: tuple[str, str] | None = None,
     ) -> tuple[list[Sentence], dict]:
-        """Sample sentences balanced across all three levels by token count.
+        """Sample sentences balanced across all three levels.
+
+        Specify exactly one of ``sentences`` or ``tokens``:
+
+        - ``sentences=N``: Sample approximately N sentences.
+        - ``tokens=N``: Sample sentences until at least N tokens are
+          accumulated (greedy, so actual count >= N).
 
         Args:
-            target_tokens: Minimum number of tokens to sample.
+            sentences: Approximate number of sentences to sample.
+            tokens: Minimum number of tokens to sample.
             rng: NumPy random generator.
             exclude: Optional ``(level, value)`` tuple to exclude from sampling.
 
         Returns:
             Tuple of (sampled_sentences, breakdown_dict). Breakdown values
             are token counts.
+
+        Raises:
+            ValueError: If neither or both of ``sentences`` and ``tokens``
+                are provided.
         """
-        sentences = self._corpus._sentences
+        if (sentences is None and tokens is None) or (
+            sentences is not None and tokens is not None
+        ):
+            raise ValueError(
+                "Specify exactly one of 'sentences' or 'tokens', not both. "
+                f"Got sentences={sentences!r}, tokens={tokens!r}."
+            )
+        sentences_list = self._corpus._sentences
         if exclude is not None:
             exclude_level, exclude_value = exclude
-            sentences = [
+            sentences_list = [
                 s
-                for s in sentences
+                for s in sentences_list
                 if s.metadata.get(exclude_level) != exclude_value
             ]
+        grouped = BalancedSampler.group_by_levels(sentences_list, list(self._levels))
 
-        level_order = list(self._levels)
-        grouped = BalancedSampler.group_by_levels(sentences, level_order)
-        samples, breakdown = BalancedSampler.sample_balanced(
-            grouped,
-            level_order,
-            target_tokens,
-            rng,
-            return_sentences=True,
-        )
+        if sentences is not None:
+            samples, breakdown = BalancedSampler.sample_balanced_by_sentences(
+                grouped, list(self._levels), sentences, rng,
+            )
+        else:
+            assert tokens is not None
+            samples, breakdown = BalancedSampler.sample_balanced(
+                grouped, list(self._levels), tokens, rng, return_sentences=True
+            )
         return samples, breakdown
+
+    def get_unique_tuples(self) -> list[tuple[str, ...]]:
+        """Get unique tuples across all hierarchy levels in this corpus.
+
+        Returns:
+            Sorted list of tuples, one per unique combination of values
+            across all levels.
+        """
+        return self._corpus.get_unique_tuples(self._levels)
 
     def stats(self) -> None:
         """Print a table grouped by the top-level entity."""
