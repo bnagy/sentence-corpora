@@ -37,7 +37,7 @@ def _greedy_accumulate(
 
     This is the shared greedy accumulation primitive used by both
     :meth:`BalancedSampler.sample_balanced` (randomized) and
-    :meth:`Corpus.chunk_works` (deterministic).
+    :meth:`Corpus.chunk` (deterministic).
 
     Args:
         sentences: Pool of sentences to draw from.
@@ -155,7 +155,6 @@ class BalancedSampler:
         breakdown: dict = {}
 
         for key, allocated_tokens in allocations.items():
-            # Skip groups with nothing to sample
             if allocated_tokens <= 0:
                 continue
 
@@ -182,11 +181,71 @@ class BalancedSampler:
                         all_samples.extend([tuple(s.text.split()) for s in selected])
                     breakdown[key] = token_count
                 else:
-                    # Single sentence (edge case)
                     if return_sentences:
                         all_samples.append(current_level_data)
                     else:
                         all_samples.append(tuple(current_level_data.text.split()))
+                    breakdown[key] = _sentence_tokens(current_level_data)
+
+        return all_samples, breakdown
+
+    @staticmethod
+    def sample_balanced_by_sentences(
+        grouped_sentences: Any,
+        levels: list[str],
+        target_sentences: int,
+        rng: np.random.Generator,
+    ) -> tuple[list[Sentence], dict]:
+        """Perform balanced sampling across hierarchy levels by sentence count.
+
+        Sentences are allocated proportionally across groups based on group
+        size (sentence count). At each leaf, exactly the allocated number of
+        sentences is sampled (or all available if fewer).
+
+        Args:
+            grouped_sentences: Nested dictionary from :meth:`group_by_levels`.
+            levels: List of hierarchy levels being sampled.
+            target_sentences: Exact number of sentences to sample.
+            rng: NumPy random generator for reproducibility.
+
+        Returns:
+            Tuple of ``(sampled_sentences, breakdown_dict)``. Breakdown values
+            are token counts.
+        """
+        if not levels or target_sentences <= 0:
+            return [], {}
+
+        rest_levels = levels[1:]
+
+        allocations = BalancedSampler._allocate_sentences_evenly(
+            grouped_sentences, target_sentences
+        )
+
+        all_samples: list[Sentence] = []
+        breakdown: dict = {}
+
+        for key, allocated_sentences in allocations.items():
+            if allocated_sentences <= 0:
+                continue
+
+            current_level_data = grouped_sentences[key]
+
+            if rest_levels and isinstance(current_level_data, dict):
+                sub_samples, sub_breakdown = BalancedSampler.sample_balanced_by_sentences(
+                    current_level_data, rest_levels, allocated_sentences, rng,
+                )
+                all_samples.extend(sub_samples)
+                breakdown[key] = sub_breakdown
+            else:
+                if isinstance(current_level_data, list):
+                    selected, token_count = BalancedSampler._sample_sentences_exact(
+                        current_level_data, allocated_sentences, rng
+                    )
+                    all_samples.extend(selected)
+                    breakdown[key] = token_count
+                else:
+                    # Single sentence (edge case)
+                    all_samples.append(current_level_data)
                     breakdown[key] = _sentence_tokens(current_level_data)
 
         return all_samples, breakdown
@@ -216,8 +275,10 @@ class BalancedSampler:
         """Allocate token targets proportionally across groups.
 
         Each group receives a share of the target proportional to its
-        fraction of total tokens. The remainder (from integer division)
-        is distributed one token each to the first N groups.
+        fraction of total tokens, capped at the group's available tokens.
+        Surplus from capped groups is redistributed to groups with remaining
+        capacity. The remainder (from integer division) is distributed one
+        token each to the first N groups with remaining capacity.
 
         Args:
             groups: Dictionary mapping group names to their contents
@@ -235,21 +296,180 @@ class BalancedSampler:
         if total_tokens == 0:
             return {g: 0 for g in group_names}
 
+        # Cap target at total available — no point allocating more than exists
+        target_tokens = min(target_tokens, total_tokens)
+
+        available: dict[str, int] = {}
+        for g in group_names:
+            available[g] = BalancedSampler._get_group_tokens(groups[g])
+
         allocated: dict[str, int] = {}
         remaining = target_tokens
 
-        for idx, group_name in enumerate(group_names):
-            group_tokens = BalancedSampler._get_group_tokens(groups[group_name])
-            # Proportional share, rounded down
-            share = (target_tokens * group_tokens) // total_tokens
-            allocated[group_name] = share
-            remaining -= share
+        # First pass: proportional share, capped at available
+        uncapped_groups = list(group_names)
+        while uncapped_groups and remaining > 0:
+            total_available = sum(available[g] for g in uncapped_groups)
+            if total_available == 0:
+                break
 
-        # Distribute remainder to first N groups
-        for idx in range(min(remaining, len(group_names))):
-            allocated[group_names[idx]] += 1
+            new_uncapped = []
+            for group_name in uncapped_groups:
+                group_avail = available[group_name]
+                # Proportional share of remaining, rounded down
+                share = (remaining * group_avail) // total_available
+                # Cap at what's actually available
+                actual = min(share, group_avail)
+                allocated[group_name] = allocated.get(group_name, 0) + actual
+                remaining -= actual
+                if actual < group_avail:
+                    new_uncapped.append(group_name)
+                # Update available for next iteration
+                available[group_name] -= actual
+
+            # If no progress made, break to avoid infinite loop
+            if len(new_uncapped) == len(uncapped_groups):
+                break
+            uncapped_groups = new_uncapped
+
+        # Distribute any remaining tokens to groups with capacity
+        for group_name in group_names:
+            if remaining <= 0:
+                break
+            group_avail = BalancedSampler._get_group_tokens(groups[group_name])
+            current = allocated.get(group_name, 0)
+            can_take = group_avail - current
+            if can_take > 0:
+                extra = min(can_take, remaining)
+                allocated[group_name] = current + extra
+                remaining -= extra
+
+        # Ensure all groups have an entry
+        for g in group_names:
+            if g not in allocated:
+                allocated[g] = 0
 
         return allocated
+
+    @staticmethod
+    def _allocate_sentences_evenly(groups: dict, target_sentences: int) -> dict[str, int]:
+        """Allocate sentence counts proportionally across groups.
+
+        Each group receives a share of the target proportional to its
+        fraction of total sentences, capped at the group's available
+        sentences. Surplus from capped groups is redistributed.
+
+        Args:
+            groups: Dictionary mapping group names to their contents
+                (nested dicts or lists of sentences).
+            target_sentences: Total sentences to allocate.
+
+        Returns:
+            Dictionary mapping group names to allocated sentence counts.
+        """
+        group_names = sorted(groups.keys())
+        total_sentences = sum(
+            BalancedSampler._get_group_sentences(groups[g]) for g in group_names
+        )
+
+        if total_sentences == 0:
+            return {g: 0 for g in group_names}
+
+        target_sentences = min(target_sentences, total_sentences)
+
+        available: dict[str, int] = {}
+        for g in group_names:
+            available[g] = BalancedSampler._get_group_sentences(groups[g])
+
+        allocated: dict[str, int] = {}
+        remaining = target_sentences
+
+        uncapped_groups = list(group_names)
+        while uncapped_groups and remaining > 0:
+            total_avail = sum(available[g] for g in uncapped_groups)
+            if total_avail == 0:
+                break
+
+            new_uncapped = []
+            for group_name in uncapped_groups:
+                group_avail = available[group_name]
+                share = (remaining * group_avail) // total_avail
+                actual = min(share, group_avail)
+                allocated[group_name] = allocated.get(group_name, 0) + actual
+                remaining -= actual
+                if actual < group_avail:
+                    new_uncapped.append(group_name)
+                available[group_name] -= actual
+
+            if len(new_uncapped) == len(uncapped_groups):
+                break
+            uncapped_groups = new_uncapped
+
+        for group_name in group_names:
+            if remaining <= 0:
+                break
+            group_avail = BalancedSampler._get_group_sentences(groups[group_name])
+            current = allocated.get(group_name, 0)
+            can_take = group_avail - current
+            if can_take > 0:
+                extra = min(can_take, remaining)
+                allocated[group_name] = current + extra
+                remaining -= extra
+
+        for g in group_names:
+            if g not in allocated:
+                allocated[g] = 0
+
+        return allocated
+
+    @staticmethod
+    def _get_group_sentences(group_data: Any) -> int:
+        """Calculate the total number of sentences in a group.
+
+        Args:
+            group_data: A list of Sentences, a nested dict, or a single Sentence.
+
+        Returns:
+            Total number of sentences in the group.
+        """
+        if isinstance(group_data, list):
+            return len(group_data)
+        elif isinstance(group_data, dict):
+            return sum(
+                BalancedSampler._get_group_sentences(v) for v in group_data.values()
+            )
+        elif isinstance(group_data, Sentence):
+            return 1
+        else:
+            return 0
+
+    @staticmethod
+    def _sample_sentences_exact(
+        sentences: list[Sentence],
+        target_sentences: int,
+        rng: np.random.Generator,
+    ) -> tuple[list[Sentence], int]:
+        """Sample exactly target_sentences sentences (or all if fewer available).
+
+        Shuffles sentences and takes the first target_sentences.
+
+        Args:
+            sentences: Pool of sentences to sample from.
+            target_sentences: Exact number of sentences to sample.
+            rng: NumPy random generator.
+
+        Returns:
+            Tuple of (selected_sentences, actual_token_count).
+        """
+        if not sentences or target_sentences <= 0:
+            return [], 0
+
+        actual = min(target_sentences, len(sentences))
+        indices = np.arange(len(sentences))
+        rng.shuffle(indices)
+        selected = [sentences[i] for i in indices[:actual]]
+        token_count = sum(_sentence_tokens(s) for s in selected)
+        return selected, token_count
 
     @staticmethod
     def _get_group_tokens(group_data: Any) -> int:

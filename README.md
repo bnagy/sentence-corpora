@@ -102,8 +102,8 @@ result = av.run_single_av_problem(
     known_entity="Guillelmus de Morbeka",
     q_corpus=nile_corpus,
     kr_corpus=train_corpus,
-    known_size=1000,
-    reference_size=5000,
+    known_tokens=1000,
+    reference_tokens=5000,
 )
 print(f"Score: {result['score']}")
 ```

@@ -25,10 +25,13 @@ class HierarchicalCorpus(Protocol):
     :meth:`LambdaGAV.run_single_av_problem`, regardless of hierarchy depth.
     """
 
+    def __init__(
+        self, sentences: list, levels: tuple[str, ...] | None = ...
+    ) -> None: ...
     def get_levels(self) -> list[str]: ...
     def filter_by_level(self, level: str, value: str) -> "HierarchicalCorpus": ...
     def sample_balanced(
-        self, total: int, rng: np.random.Generator
+        self, *, tokens: int, rng: np.random.Generator, **kwargs: object
     ) -> tuple[list, dict]: ...
     def __len__(self) -> int: ...
     def __iter__(self): ...
@@ -49,8 +52,8 @@ class LambdaGAV:
             ...     known_entity="Guillelmus de Morbeka",
             ...     q_corpus=nile_corpus,
             ...     kr_corpus=train_corpus,
-            ...     known_size=1000,
-            ...     reference_size=5000,
+            ...     known_tokens=1000,
+            ...     reference_tokens=5000,
             ... )
 
         Two-level (e.g., author verification)::
@@ -60,8 +63,8 @@ class LambdaGAV:
             ...     known_entity="Aristotle",
             ...     q_corpus=unknown_work,
             ...     kr_corpus=train_corpus,
-            ...     known_size=2000,
-            ...     reference_size=10000,
+            ...     known_tokens=2000,
+            ...     reference_tokens=10000,
             ... )
     """
 
@@ -139,8 +142,8 @@ class LambdaGAV:
         known_entity: str,
         q_corpus: "HierarchicalCorpus",
         kr_corpus: "HierarchicalCorpus",
-        known_size: int = 1000,
-        reference_size: int = 5000,
+        known_tokens: int = 1000,
+        reference_tokens: int = 5000,
         order: int | None = None,
         num_references: int | None = None,
         seed: int | None = None,
@@ -155,10 +158,10 @@ class LambdaGAV:
         Steps:
         1. Extract the known corpus (k_corpus) from *kr_corpus* by
            filtering to *known_entity* at the verification level.
-        2. Sample *known_size* sentences from k_corpus, balanced across
+        2. Sample *known_tokens* sentences from k_corpus, balanced across
            lower hierarchy levels.
         3. Build the reference corpus by excluding *known_entity* from
-           *kr_corpus*, then sample *reference_size* sentences balanced
+           *kr_corpus*, then sample *reference_tokens* sentences balanced
            across all remaining entities.
         4. Use all sentences from *q_corpus* as the unknown text.
         5. Compute the LambdaG score.
@@ -170,8 +173,8 @@ class LambdaGAV:
             q_corpus: Corpus of the unknown/question text.
             kr_corpus: Combined known + reference corpus containing all
                 entities' sentences.
-            known_size: Minimum tokens to sample from the known entity.
-            reference_size: Minimum tokens for the reference set.
+            known_tokens: Minimum tokens to sample from the known entity.
+            reference_tokens: Minimum tokens for the reference set.
             order: N-gram order (defaults to instance value).
             num_references: Passed to LambdaGMethod (defaults to instance
                 value).
@@ -207,7 +210,7 @@ class LambdaGAV:
             }
 
         known_sentences_raw, known_breakdown_full = k_corpus.sample_balanced(
-            known_size, rng
+            tokens=known_tokens, rng=rng
         )
         known_sentences = [tuple(s.text.split()) for s in known_sentences_raw]
         known_breakdown = self._flatten_breakdown(known_breakdown_full)
@@ -216,9 +219,11 @@ class LambdaGAV:
         ref_sentences_list = [
             s for s in kr_corpus if getattr(s, verification_level) != known_entity
         ]
-        ref_corpus = type(kr_corpus)(ref_sentences_list)  # type: ignore[call-arg]
+        ref_corpus = type(kr_corpus)(
+            ref_sentences_list, levels=tuple(kr_corpus.get_levels())
+        )
         reference_sentences_raw, ref_breakdown = ref_corpus.sample_balanced(
-            reference_size, rng
+            tokens=reference_tokens, rng=rng
         )
         reference_sentences = [tuple(s.text.split()) for s in reference_sentences_raw]
 

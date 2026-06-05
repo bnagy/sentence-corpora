@@ -74,6 +74,31 @@ class Corpus:
                 values.add(v)
         return sorted(values)
 
+    def get_unique_tuples(self, levels: tuple[str, ...] | None = None) -> list[tuple[str, ...]]:
+        """Get unique tuples across hierarchy levels.
+
+        Args:
+            levels: Level names to include. If not provided, levels are
+                derived from the first sentence's metadata key order.
+
+        Returns:
+            Sorted list of tuples, one per unique combination of values
+            across the given levels.
+        """
+        if not self._sentences:
+            return []
+        if levels is None:
+            levels = tuple(self._sentences[0].metadata.keys())
+        tuples: set[tuple[str, ...]] = set()
+        for s in self._sentences:
+            key: tuple[str, ...] = tuple(
+                v for v in (s.metadata[level] for level in levels)
+                if isinstance(v, str)
+            )
+            if len(key) == len(levels):
+                tuples.add(key)
+        return sorted(tuples)
+
     def filter_by_level(self, level: str, value: str) -> Corpus:
         """Filter corpus by a specific level and value."""
         filtered = [s for s in self._sentences if s.metadata.get(level) == value]
@@ -90,8 +115,12 @@ class Corpus:
         with open(path, "rb") as f:
             return pickle.load(f)
 
-    def chunk_works(self, min_tokens: int) -> Corpus:
-        """Chunk works into smaller pieces with at least min_tokens each.
+    def chunk(self, min_tokens: int) -> Corpus:
+        """Chunk the lowest hierarchy level into smaller pieces.
+
+        Groups sentences by their full hierarchy tuple, then splits each
+        group into contiguous chunks targeting at least min_tokens each.
+        The lowest (last) level is renamed with a chunk suffix.
 
         Uses a two-phase approach:
         1. Greedy accumulation with backward merge: forward accumulate sentences
@@ -107,10 +136,10 @@ class Corpus:
             min_tokens: Minimum number of tokens per chunk.
 
         Returns:
-            A new Corpus with chunked works named {work}_{chunk_num}.
+            A new Corpus with chunked units named {level}_{chunk_num}.
 
         Raises:
-            ValueError: If any work has fewer tokens than min_tokens.
+            ValueError: If any group has fewer tokens than min_tokens.
         """
         if not self._sentences:
             return Corpus([])
@@ -119,25 +148,20 @@ class Corpus:
         if not levels:
             return Corpus(self._sentences)
 
-        work_level = levels[0]  # First level is the work level
+        chunk_level = levels[-1]  # Lowest level is what we chunk
 
         # Group sentences by the full hierarchy tuple to avoid collisions.
-        by_work: dict[tuple, list[Sentence]] = {}
+        by_group: dict[tuple, list[Sentence]] = {}
         for s in self._sentences:
-            work = s.metadata.get(work_level)
-            if not isinstance(work, str):
+            group_key = tuple(str(s.metadata.get(level, "")) for level in levels)
+            if not all(isinstance(s.metadata.get(level), str) for level in levels):
                 continue
-            key_parts = [work]
-            for level in levels[1:]:
-                key_parts.append(str(s.metadata.get(level, "")))
-            key = tuple(key_parts)
-            if key not in by_work:
-                by_work[key] = []
-            by_work[key].append(s)
+            if group_key not in by_group:
+                by_group[group_key] = []
+            by_group[group_key].append(s)
 
         new_sentences: list[Sentence] = []
-        for key, sentences in by_work.items():
-            work = key[0]
+        for key, sentences in by_group.items():
 
             # Defensive check: verify all sentences in this group share the
             # same hierarchy metadata.
@@ -151,13 +175,13 @@ class Corpus:
                                 f"Chunking integrity violation: sentences with "
                                 f"different '{level}' values ({expected!r} vs "
                                 f"{actual!r}) were mixed into the same chunk "
-                                f"for work {work!r}"
+                                f"for group {key!r}"
                             )
 
             total_tokens = sum(len(s.text.split()) for s in sentences)
             if total_tokens < min_tokens:
                 raise ValueError(
-                    f"Work '{work}' has {total_tokens} tokens, "
+                    f"Group '{key}' has {total_tokens} tokens, "
                     f"which is less than min_tokens={min_tokens}"
                 )
 
@@ -168,13 +192,14 @@ class Corpus:
             self._ripple_optimize(chunks, min_tokens)
 
             # Build output sentences with chunk metadata
+            group_name = key[-1]  # Name of the lowest level
             for chunk_idx, chunk in enumerate(chunks, 1):
                 for s in chunk:
                     new_s = Sentence(
                         text=s.text,
                         metadata={
                             **s.metadata,
-                            work_level: f"{work}_{chunk_idx}",
+                            chunk_level: f"{group_name}_{chunk_idx}",
                         },
                     )
                     new_sentences.append(new_s)

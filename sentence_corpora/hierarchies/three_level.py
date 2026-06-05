@@ -210,7 +210,7 @@ class ThreeLevelCorpus:
             return obj
         return cls(obj._sentences, levels=levels)
 
-    def chunk_works(self, min_tokens: int) -> ThreeLevelCorpus:
-        """Chunk works into smaller pieces with at least min_tokens each."""
-        chunked = self._corpus.chunk_works(min_tokens)
+    def chunk(self, min_tokens: int) -> ThreeLevelCorpus:
+        """Chunk the lowest hierarchy level into smaller pieces with at least min_tokens each."""
+        chunked = self._corpus.chunk(min_tokens)
         return ThreeLevelCorpus(chunked._sentences, levels=self._levels)

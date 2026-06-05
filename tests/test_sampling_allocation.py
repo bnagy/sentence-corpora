@@ -61,37 +61,42 @@ class TestAllocateTokensEvenly:
         assert result["b"] == 2
 
     def test_proportional_split(self) -> None:
-        """Groups get allocation proportional to their token share."""
+        """Groups get allocation proportional to their token share, capped at available."""
         groups = {
             "a": [Sentence(text="x y z", metadata={})],  # 3 tokens
             "b": [Sentence(text="x", metadata={})],  # 1 token
         }
         result = BalancedSampler._allocate_tokens_evenly(groups, 8)
-        assert result["a"] == 6
-        assert result["b"] == 2
+        # Total available is 4, so allocation is capped
+        assert sum(result.values()) == 4
+        assert result["a"] == 3
+        assert result["b"] == 1
 
     def test_remainder_distribution(self) -> None:
-        """Remainder tokens go to first groups."""
+        """When target exceeds total, allocation is capped at available."""
         groups = {
             "a": [Sentence(text="x", metadata={})],  # 1 token
             "b": [Sentence(text="x", metadata={})],  # 1 token
             "c": [Sentence(text="x", metadata={})],  # 1 token
         }
         result = BalancedSampler._allocate_tokens_evenly(groups, 5)
-        assert result["a"] == 2
-        assert result["b"] == 2
+        # Total available is 3, so each group gets its 1 token
+        assert result["a"] == 1
+        assert result["b"] == 1
         assert result["c"] == 1
-        assert sum(result.values()) == 5
+        assert sum(result.values()) == 3
 
     def test_request_more_than_total(self) -> None:
-        """Proportional allocation can exceed actual group size (greedy handles it)."""
+        """When target exceeds total available, allocation is capped at available."""
         groups = {
             "a": [Sentence(text="x y", metadata={})],  # 2 tokens
             "b": [Sentence(text="x", metadata={})],  # 1 token
         }
         result = BalancedSampler._allocate_tokens_evenly(groups, 1000)
-        assert result["a"] == 667
-        assert result["b"] == 333
+        # Total available is 3, so allocation is capped
+        assert sum(result.values()) == 3
+        assert result["a"] == 2
+        assert result["b"] == 1
 
     def test_nested_groups(self) -> None:
         """Nested dict groups: allocation based on recursive token count."""
@@ -107,10 +112,11 @@ class TestAllocateTokensEvenly:
         assert result["b"] == 2
 
     def test_single_group(self) -> None:
-        """Single group gets all tokens."""
+        """Single group gets all tokens, capped at available."""
         groups = {"a": [Sentence(text="x y z", metadata={})]}
         result = BalancedSampler._allocate_tokens_evenly(groups, 10)
-        assert result["a"] == 10
+        # Only 3 tokens available, so capped
+        assert result["a"] == 3
 
     def test_zero_total_tokens(self) -> None:
         """All groups empty → zero allocation."""
@@ -120,13 +126,13 @@ class TestAllocateTokensEvenly:
         assert result["b"] == 0
 
     def test_sum_equals_target(self) -> None:
-        """Sum of allocations should equal target_tokens."""
+        """Sum of allocations equals target when corpus has enough tokens."""
         groups = {
             "a": [Sentence(text="x y z", metadata={})],  # 3
             "b": [Sentence(text="x y", metadata={})],  # 2
             "c": [Sentence(text="x", metadata={})],  # 1
         }
-        target = 12
+        target = 6  # Exactly matches total available
         result = BalancedSampler._allocate_tokens_evenly(groups, target)
         assert sum(result.values()) == target
 

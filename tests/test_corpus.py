@@ -209,32 +209,32 @@ class TestCorpus:
         assert len(r) < len(long_text) + 50
 
     # ---------------------------------------------------------------------------
-    # chunk_works tests
+    # chunk tests
     # ---------------------------------------------------------------------------
 
-    def test_chunk_works_empty_corpus(self):
-        """Test chunk_works on empty corpus."""
+    def test_chunk_empty_corpus(self):
+        """Test chunk on empty corpus."""
         corpus = Corpus([])
-        chunked = corpus.chunk_works(100)
+        chunked = corpus.chunk(100)
         assert len(chunked) == 0
 
-    def test_chunk_works_no_levels(self):
-        """Test chunk_works on corpus with sentences but no metadata levels."""
+    def test_chunk_no_levels(self):
+        """Test chunk on corpus with sentences but no metadata levels."""
         sentences = [
             Sentence(text="word " * 500, metadata={}),
             Sentence(text="word " * 500, metadata={}),
         ]
         corpus = Corpus(sentences)
-        chunked = corpus.chunk_works(100)
+        chunked = corpus.chunk(100)
         assert len(chunked) == 2
 
-    def test_chunk_works_all_chunks_above_min(self):
+    def test_chunk_all_chunks_above_min(self):
         """Every chunk has at least min_tokens (greedy_bmerge guarantee)."""
         sentences = [
             Sentence(text="word " * 20, metadata={"work": "w1"}) for _ in range(20)
         ]
         corpus = Corpus(sentences)
-        chunked = corpus.chunk_works(50)
+        chunked = corpus.chunk(50)
 
         chunk_tokens: dict[str, int] = defaultdict(int)
         for s in chunked:
@@ -242,12 +242,12 @@ class TestCorpus:
         for work, tokens in chunk_tokens.items():
             assert tokens >= 50, f"Chunk {work} has only {tokens} tokens (min=50)"
 
-    def test_chunk_works_floor_constraint(self):
+    def test_chunk_floor_constraint(self):
         """No chunk falls below floor (0.8 * min_tokens) after ripple."""
         sentences = [Sentence(text="s " * 10, metadata={"work": "w1"}) for _ in range(9)]
         sentences.append(Sentence(text="L " * 200, metadata={"work": "w1"}))
         corpus = Corpus(sentences)
-        chunked = corpus.chunk_works(50)
+        chunked = corpus.chunk(50)
 
         chunk_tokens: dict[str, int] = defaultdict(int)
         for s in chunked:
@@ -258,7 +258,7 @@ class TestCorpus:
                 f"Chunk {work} has {tokens} tokens, below floor={floor}"
             )
 
-    def test_chunk_works_sentences_sequential(self):
+    def test_chunk_sentences_sequential(self):
         """Sentences remain in sequential order within and across chunks."""
         sentences = [
             Sentence(text="A " * 30, metadata={"work": "w1"}),
@@ -267,7 +267,7 @@ class TestCorpus:
             Sentence(text="D " * 30, metadata={"work": "w1"}),
         ]
         corpus = Corpus(sentences)
-        chunked = corpus.chunk_works(50)
+        chunked = corpus.chunk(50)
 
         texts = [s.text for s in chunked]
         assert texts[0].startswith("A")
@@ -275,7 +275,7 @@ class TestCorpus:
         assert texts[2].startswith("C")
         assert texts[3].startswith("D")
 
-    def test_chunk_works_no_split_sentences(self):
+    def test_chunk_no_split_sentences(self):
         """Sentences are not split across chunks."""
         sentences = [
             Sentence(text="word " * 30, metadata={"work": "w1"}),
@@ -284,13 +284,13 @@ class TestCorpus:
             Sentence(text="word " * 30, metadata={"work": "w1"}),
         ]
         corpus = Corpus(sentences)
-        chunked = corpus.chunk_works(50)
+        chunked = corpus.chunk(50)
 
         work_counts = Counter(s.metadata["work"] for s in chunked)
         for count in work_counts.values():
             assert count == 2, f"Expected 2 sentences per chunk, got {count}"
 
-    def test_chunk_works_no_author_collisions(self):
+    def test_chunk_no_author_collisions(self):
         """Chunks never mix sentences from different authors."""
         sentences = [
             Sentence(text="a " * 500, metadata={"work": "shared", "author": "A1"}),
@@ -299,7 +299,7 @@ class TestCorpus:
             Sentence(text="d " * 500, metadata={"work": "shared", "author": "A2"}),
         ]
         corpus = Corpus(sentences)
-        chunked = corpus.chunk_works(100)
+        chunked = corpus.chunk(100)
 
         seen_pairs = set()
         for s in chunked:
@@ -316,7 +316,7 @@ class TestCorpus:
 
         assert len(chunked) == 4
 
-    def test_chunk_works_no_translator_collisions(self):
+    def test_chunk_no_translator_collisions(self):
         """Chunks never mix sentences from different translators."""
         sentences = [
             Sentence(
@@ -337,7 +337,7 @@ class TestCorpus:
             ),
         ]
         corpus = Corpus(sentences)
-        chunked = corpus.chunk_works(100)
+        chunked = corpus.chunk(100)
 
         seen_tuples = set()
         for s in chunked:
@@ -354,33 +354,33 @@ class TestCorpus:
 
         assert len(chunked) == 4
 
-    def test_chunk_works_single_sentence_above_min(self):
+    def test_chunk_single_sentence_above_min(self):
         """Edge case: single sentence with tokens >= min_tokens."""
         sentences = [
             Sentence(text="word " * 100, metadata={"work": "w1"}),
         ]
         corpus = Corpus(sentences)
-        chunked = corpus.chunk_works(50)
+        chunked = corpus.chunk(50)
         assert len(chunked) == 1
         assert len(chunked[0].text.split()) == 100
 
-    def test_chunk_works_exact_multiple(self):
+    def test_chunk_exact_multiple(self):
         """Edge case: total tokens is exact multiple of min_tokens."""
         sentences = [
             Sentence(text="word " * 50, metadata={"work": "w1"}) for _ in range(5)
         ]
         corpus = Corpus(sentences)
-        chunked = corpus.chunk_works(50)
+        chunked = corpus.chunk(50)
         assert len(chunked) == 5
         for s in chunked:
             assert len(s.text.split()) == 50
 
-    def test_chunk_works_ripple_improves_evenness(self):
+    def test_chunk_ripple_improves_evenness(self):
         """Ripple optimization produces reasonably even chunk sizes."""
         sentences = [Sentence(text="s " * 5, metadata={"work": "w1"}) for _ in range(20)]
         sentences.append(Sentence(text="L " * 100, metadata={"work": "w1"}))
         corpus = Corpus(sentences)
-        chunked = corpus.chunk_works(50)
+        chunked = corpus.chunk(50)
 
         chunk_tokens: dict[str, int] = defaultdict(int)
         for s in chunked:
@@ -390,7 +390,7 @@ class TestCorpus:
         std = (sum((x - mean) ** 2 for x in sizes) / len(sizes)) ** 0.5
         assert std < 50, f"Chunk sizes too uneven: std={std:.1f}, sizes={sizes}"
 
-    def test_chunk_works_small_remainder_merges_backward(self):
+    def test_chunk_small_remainder_merges_backward(self):
         """Small remainder is merged into the previous chunk."""
         sentences = [
             Sentence(text="A " * 60, metadata={"work": "w1"}),
@@ -398,7 +398,7 @@ class TestCorpus:
             Sentence(text="C " * 10, metadata={"work": "w1"}),
         ]
         corpus = Corpus(sentences)
-        chunked = corpus.chunk_works(50)
+        chunked = corpus.chunk(50)
 
         work_counts = Counter(s.work for s in chunked)
         assert len(work_counts) == 2, f"Expected 2 chunks, got {len(work_counts)}"
@@ -408,3 +408,28 @@ class TestCorpus:
             chunk_tokens[s.work] += len(s.text.split())
         for work, tokens in chunk_tokens.items():
             assert tokens >= 50, f"Chunk {work} has only {tokens} tokens"
+
+    def test_get_unique_tuples(self):
+        """Test getting unique tuples across all levels."""
+        sentences = [
+            Sentence(text="T1", metadata={"work": "w1", "author": "a1"}),
+            Sentence(text="T2", metadata={"work": "w1", "author": "a1"}),
+            Sentence(text="T3", metadata={"work": "w2", "author": "a1"}),
+            Sentence(text="T4", metadata={"work": "w2", "author": "a2"}),
+        ]
+        corpus = Corpus(sentences)
+        result = corpus.get_unique_tuples()
+        assert result == [("w1", "a1"), ("w2", "a1"), ("w2", "a2")]
+
+    def test_get_unique_tuples_empty_corpus(self):
+        """Test get_unique_tuples on empty corpus returns empty list."""
+        corpus = Corpus([])
+        assert corpus.get_unique_tuples() == []
+
+    def test_get_unique_tuples_single_sentence(self):
+        """Test get_unique_tuples with a single sentence."""
+        sentences = [
+            Sentence(text="T1", metadata={"work": "w1", "author": "a1"}),
+        ]
+        corpus = Corpus(sentences)
+        assert corpus.get_unique_tuples() == [("w1", "a1")]

@@ -92,9 +92,11 @@ class TestTwoLevelCorpus:
         corpus = ThreeLevelCorpus(sentences, levels=("translator", "author", "work"))
         rng = np.random.default_rng(42)
 
-        samples, breakdown = corpus.sample_balanced(2, rng)
+        samples, breakdown = corpus.sample_balanced(sentences=2, rng=rng)
 
-        assert len(samples) == 2
+        # Balanced sampling may return slightly more than requested due to
+        # greedy accumulation at leaf level
+        assert 2 <= len(samples) <= 4
         assert isinstance(samples[0], Sentence)
         assert "trans1" in breakdown
 
@@ -151,7 +153,7 @@ class TestTwoLevelCorpus:
         assert loaded.get_unique_values("work") == ["work1", "work2"]
         # Verify sample_balanced works on loaded corpus
         rng = np.random.default_rng(42)
-        samples, breakdown = loaded.sample_balanced(4, rng)
+        samples, breakdown = loaded.sample_balanced(sentences=4, rng=rng)
         assert len(samples) > 0
 
     def test_repr(self):
@@ -212,7 +214,7 @@ class TestTwoLevelCorpus:
         ]
         corpus = TwoLevelCorpus(sentences, levels=("author", "work"))
         rng = np.random.default_rng(42)
-        samples, breakdown = corpus.sample_balanced(2, rng, exclude=("author", "a1"))
+        samples, breakdown = corpus.sample_balanced(sentences=2, rng=rng, exclude=("author", "a1"))
         assert all(s.metadata["author"] != "a1" for s in samples)
 
     def test_stats_with_dynamic_levels(self, capsys):
@@ -254,12 +256,12 @@ class TestTwoLevelCorpus:
         corpus.to_pickle(str(path))
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            loaded = TwoLevelCorpus.from_pickle(str(path))
+            TwoLevelCorpus.from_pickle(str(path))
             assert len(w) == 1
             assert "auto-detected" in str(w[0].message)
 
-    def test_chunk_works_preserves_levels(self):
-        """Test chunk_works preserves levels."""
+    def test_chunk_preserves_levels(self):
+        """Test chunk preserves levels."""
         sentences = [
             Sentence(text="word " * 500, metadata={"work": "w1", "author": "a1"}),
             Sentence(text="word " * 500, metadata={"work": "w1", "author": "a1"}),
@@ -270,7 +272,7 @@ class TestTwoLevelCorpus:
             Sentence(text="word " * 500, metadata={"work": "w1", "author": "a1"}),
         ]
         corpus = TwoLevelCorpus(sentences, levels=("author", "work"))
-        chunked = corpus.chunk_works(1000)
+        chunked = corpus.chunk(1000)
         assert chunked.levels == ("author", "work")
         assert len(chunked) == 7
 
@@ -362,7 +364,7 @@ class TestThreeLevelCorpusAutoDetect:
         ]
         corpus = ThreeLevelCorpus(sentences, levels=("translator", "author", "work"))
         rng = np.random.default_rng(42)
-        samples, breakdown = corpus.sample_balanced(2, rng, exclude=("translator", "t1"))
+        samples, breakdown = corpus.sample_balanced(sentences=2, rng=rng, exclude=("translator", "t1"))
         assert all(s.metadata["translator"] != "t1" for s in samples)
 
     def test_stats_with_dynamic_levels(self, capsys):
@@ -404,12 +406,12 @@ class TestThreeLevelCorpusAutoDetect:
         corpus.to_pickle(str(path))
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            loaded = ThreeLevelCorpus.from_pickle(str(path))
+            ThreeLevelCorpus.from_pickle(str(path))
             assert len(w) == 1
             assert "auto-detected" in str(w[0].message)
 
-    def test_chunk_works_preserves_levels(self):
-        """Test chunk_works preserves levels."""
+    def test_chunk_preserves_levels(self):
+        """Test chunk preserves levels."""
         sentences = [
             Sentence(text="word " * 500, metadata={"work": "w1", "author": "a1", "translator": "t1"}),
             Sentence(text="word " * 500, metadata={"work": "w1", "author": "a1", "translator": "t1"}),
@@ -420,7 +422,7 @@ class TestThreeLevelCorpusAutoDetect:
             Sentence(text="word " * 500, metadata={"work": "w1", "author": "a1", "translator": "t1"}),
         ]
         corpus = ThreeLevelCorpus(sentences, levels=("translator", "author", "work"))
-        chunked = corpus.chunk_works(1000)
+        chunked = corpus.chunk(1000)
         assert chunked.levels == ("translator", "author", "work")
         assert len(chunked) == 7
 
@@ -439,10 +441,10 @@ class TestThreeLevelCorpusAutoDetect:
         assert filtered.levels == ("meter", "author", "work")
 
         rng = np.random.default_rng(42)
-        samples, breakdown = corpus.sample_balanced(2, rng)
+        samples, breakdown = corpus.sample_balanced(sentences=2, rng=rng)
         assert len(samples) == 2
 
-        samples, breakdown = corpus.sample_balanced(2, rng, exclude=("meter", "dactylic"))
+        samples, breakdown = corpus.sample_balanced(sentences=2, rng=rng, exclude=("meter", "dactylic"))
         assert len(samples) == 1
         assert samples[0].metadata["meter"] == "iambic"
 
@@ -456,7 +458,7 @@ class TestThreeLevelCorpusAutoDetect:
         ]
         corpus = ThreeLevelCorpus(sentences, levels=("translator", "author", "work"))
         rng = np.random.default_rng(42)
-        samples, breakdown = corpus.sample_balanced(2, rng, exclude=("author", "a1"))
+        samples, breakdown = corpus.sample_balanced(sentences=2, rng=rng, exclude=("author", "a1"))
         assert all(s.metadata["author"] != "a1" for s in samples)
 
     def test_repr_with_levels(self):
@@ -474,3 +476,61 @@ class TestThreeLevelCorpusAutoDetect:
         ]
         corpus = TwoLevelCorpus(sentences, levels=("author", "work"))
         assert repr(corpus) == "TwoLevelCorpus(1 sentences)"
+
+    def test_get_unique_tuples(self):
+        """Test getting unique tuples across all levels."""
+        sentences = [
+            Sentence(text="T1", metadata={"work": "w1", "author": "a1"}),
+            Sentence(text="T2", metadata={"work": "w1", "author": "a1"}),
+            Sentence(text="T3", metadata={"work": "w2", "author": "a1"}),
+            Sentence(text="T4", metadata={"work": "w2", "author": "a2"}),
+        ]
+        corpus = TwoLevelCorpus(sentences, levels=("author", "work"))
+        result = corpus.get_unique_tuples()
+        assert result == [("a1", "w1"), ("a1", "w2"), ("a2", "w2")]
+
+    def test_get_unique_tuples_empty_corpus(self):
+        """Test get_unique_tuples on empty corpus returns empty list."""
+        corpus = TwoLevelCorpus([], levels=("author", "work"))
+        assert corpus.get_unique_tuples() == []
+
+    def test_get_unique_tuples_single_sentence(self):
+        """Test get_unique_tuples with a single sentence."""
+        sentences = [
+            Sentence(text="T1", metadata={"work": "w1", "author": "a1"}),
+        ]
+        corpus = TwoLevelCorpus(sentences, levels=("author", "work"))
+        assert corpus.get_unique_tuples() == [("a1", "w1")]
+
+
+class TestThreeLevelCorpusGetUniqueTuples:
+    """Tests for ThreeLevelCorpus.get_unique_tuples."""
+
+    def test_get_unique_tuples(self):
+        """Test getting unique tuples across all three levels."""
+        sentences = [
+            Sentence(text="T1", metadata={"work": "w1", "author": "a1", "translator": "t1"}),
+            Sentence(text="T2", metadata={"work": "w1", "author": "a1", "translator": "t1"}),
+            Sentence(text="T3", metadata={"work": "w2", "author": "a1", "translator": "t1"}),
+            Sentence(text="T4", metadata={"work": "w2", "author": "a2", "translator": "t2"}),
+        ]
+        corpus = ThreeLevelCorpus(sentences, levels=("translator", "author", "work"))
+        result = corpus.get_unique_tuples()
+        assert result == [
+            ("t1", "a1", "w1"),
+            ("t1", "a1", "w2"),
+            ("t2", "a2", "w2"),
+        ]
+
+    def test_get_unique_tuples_empty_corpus(self):
+        """Test get_unique_tuples on empty corpus returns empty list."""
+        corpus = ThreeLevelCorpus([], levels=("translator", "author", "work"))
+        assert corpus.get_unique_tuples() == []
+
+    def test_get_unique_tuples_single_sentence(self):
+        """Test get_unique_tuples with a single sentence."""
+        sentences = [
+            Sentence(text="T1", metadata={"work": "w1", "author": "a1", "translator": "t1"}),
+        ]
+        corpus = ThreeLevelCorpus(sentences, levels=("translator", "author", "work"))
+        assert corpus.get_unique_tuples() == [("t1", "a1", "w1")]

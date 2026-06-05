@@ -88,40 +88,83 @@ class TwoLevelCorpus:
         """Get unique values for a specific hierarchy level."""
         return self._corpus.get_unique_values(level)
 
+    def get_unique_tuples(self) -> list[tuple[str, ...]]:
+        """Get unique tuples across all hierarchy levels in this corpus.
+
+        Returns:
+            Sorted list of tuples, one per unique combination of values
+            across all levels.
+        """
+        return self._corpus.get_unique_tuples(self._levels)
+
     def filter_by_level(self, level: str, value: str) -> TwoLevelCorpus:
         """Filter corpus by a specific level and value."""
         filtered = self._corpus.filter_by_level(level, value)
         return TwoLevelCorpus(filtered._sentences, levels=self._levels)
 
+    def _avg_tokens_per_sentence(self) -> float:
+        """Return the average number of tokens per sentence in this corpus."""
+        if len(self._corpus) == 0:
+            return 1.0
+        total = sum(len(s.text.split()) for s in self._corpus)
+        return total / len(self._corpus)
+
     def sample_balanced(
         self,
-        target_tokens: int,
+        *,
+        sentences: int | None = None,
+        tokens: int | None = None,
         rng: np.random.Generator,
         exclude: tuple[str, str] | None = None,
     ) -> tuple[list[Sentence], dict]:
-        """Sample sentences balanced across both levels by token count.
+        """Sample sentences balanced across both levels.
+
+        Specify exactly one of ``sentences`` or ``tokens``:
+
+        - ``sentences=N``: Sample approximately N sentences.
+        - ``tokens=N``: Sample sentences until at least N tokens are
+          accumulated (greedy, so actual count >= N).
 
         Args:
-            target_tokens: Minimum number of tokens to sample.
+            sentences: Approximate number of sentences to sample.
+            tokens: Minimum number of tokens to sample.
             rng: NumPy random generator.
             exclude: Optional ``(level, value)`` tuple to exclude from sampling.
 
         Returns:
             Tuple of (sampled_sentences, breakdown_dict). Breakdown values
             are token counts.
+
+        Raises:
+            ValueError: If neither or both of ``sentences`` and ``tokens``
+                are provided.
         """
-        sentences = self._corpus._sentences
+        if (sentences is None and tokens is None) or (
+            sentences is not None and tokens is not None
+        ):
+            raise ValueError(
+                "Specify exactly one of 'sentences' or 'tokens', not both. "
+                f"Got sentences={sentences!r}, tokens={tokens!r}."
+            )
+        sentences_list = self._corpus._sentences
         if exclude is not None:
             exclude_level, exclude_value = exclude
-            sentences = [
+            sentences_list = [
                 s
-                for s in sentences
+                for s in sentences_list
                 if s.metadata.get(exclude_level) != exclude_value
             ]
-        grouped = BalancedSampler.group_by_levels(sentences, list(self._levels))
-        samples, breakdown = BalancedSampler.sample_balanced(
-            grouped, list(self._levels), target_tokens, rng, return_sentences=True
-        )
+        grouped = BalancedSampler.group_by_levels(sentences_list, list(self._levels))
+
+        if sentences is not None:
+            samples, breakdown = BalancedSampler.sample_balanced_by_sentences(
+                grouped, list(self._levels), sentences, rng,
+            )
+        else:
+            assert tokens is not None
+            samples, breakdown = BalancedSampler.sample_balanced(
+                grouped, list(self._levels), tokens, rng, return_sentences=True
+            )
         return samples, breakdown
 
     def stats(self) -> None:
@@ -193,7 +236,7 @@ class TwoLevelCorpus:
             return obj
         return cls(obj._sentences, levels=levels)
 
-    def chunk_works(self, min_tokens: int) -> TwoLevelCorpus:
-        """Chunk works into smaller pieces with at least min_tokens each."""
-        chunked = self._corpus.chunk_works(min_tokens)
+    def chunk(self, min_tokens: int) -> TwoLevelCorpus:
+        """Chunk the lowest hierarchy level into smaller pieces."""
+        chunked = self._corpus.chunk(min_tokens)
         return TwoLevelCorpus(chunked._sentences, levels=self._levels)
